@@ -1,8 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { UserButton } from "@clerk/nextjs";
-import Link from "next/link";
-import { LayoutDashboard, Settings } from "lucide-react";
+import { Sidebar } from "@/components/sidebar";
 
 export default async function DashboardLayout({
   children,
@@ -13,49 +11,15 @@ export default async function DashboardLayout({
   if (!userId) redirect("/sign-in");
 
   return (
-    <div className="flex min-h-screen flex-col">
-      {/* Top nav */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-6">
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-2 font-semibold tracking-tight"
-            >
-              <LayoutDashboard className="h-5 w-5" />
-              Social Aggregator
-            </Link>
-            <nav className="flex items-center gap-4 text-sm">
-              <Link
-                href="/dashboard"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Posts
-              </Link>
-              <Link
-                href="/settings"
-                className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Link>
-            </nav>
-          </div>
-          <UserButton />
-        </div>
-      </header>
+    <div className="flex min-h-screen">
+      <Sidebar />
 
-      {/* Page content */}
-      <main className="flex-1">
-        <div className="container mx-auto px-4 py-8">{children}</div>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t py-4">
-        <div className="container mx-auto px-4 text-center text-xs text-muted-foreground">
-          Social Aggregator — YouTube &amp; GitHub saves in one place
-        </div>
-      </footer>
+      {/* Main content */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-[1400px] px-8 py-8">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

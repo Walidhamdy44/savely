@@ -33,28 +33,29 @@
         scrapedAt: new Date().toISOString(),
       };
 
-      // Author name
-      const authorNameSelectors = [
-        ".entity-result__title-text a span span",
-        ".entity-result__title-text a",
+      // ── Author name ──────────────────────────────────────────
+      // Find span with aria-hidden="true" inside a profile link
+      const nameSpans = postElement.querySelectorAll(
         'a[href*="/in/"] span[aria-hidden="true"]',
-        'a[href*="/in/"] span span[aria-hidden="true"]',
-        '.app-aware-link span[aria-hidden="true"]',
-      ];
-
-      for (const selector of authorNameSelectors) {
-        const el = postElement.querySelector(selector);
-        if (el && el.textContent.trim()) {
-          data.authorName = cleanText(el.textContent);
+      );
+      for (const span of nameSpans) {
+        const text = span.textContent.trim();
+        if (
+          text &&
+          text.length > 1 &&
+          !text.includes("View") &&
+          !text.includes("•")
+        ) {
+          data.authorName = cleanText(text);
           break;
         }
       }
 
+      // Fallback
       if (!data.authorName) {
         const profileLink = postElement.querySelector('a[href*="/in/"]');
         if (profileLink) {
-          const spans = profileLink.querySelectorAll("span");
-          for (const span of spans) {
+          for (const span of profileLink.querySelectorAll("span")) {
             const text = span.textContent.trim();
             if (
               text &&
@@ -69,77 +70,52 @@
         }
       }
 
-      // Author profile URL
-      const profileLinkSelectors = [
-        'a[href*="/in/"]',
-        ".entity-result__title-text a",
-      ];
-      for (const selector of profileLinkSelectors) {
-        const el = postElement.querySelector(selector);
-        if (el && el.href && el.href.includes("/in/")) {
-          data.authorProfileURL = el.href.split("?")[0];
-          break;
-        }
+      // ── Author profile URL ───────────────────────────────────
+      const profileEl = postElement.querySelector('a[href*="/in/"]');
+      if (profileEl && profileEl.href) {
+        data.authorProfileURL = profileEl.href.split("?")[0];
       }
 
-      // Author job title
-      const jobTitleSelectors = [
-        ".entity-result__primary-subtitle",
-        ".entity-result__summary",
-        "div.entity-result__primary-subtitle",
-      ];
-      for (const selector of jobTitleSelectors) {
-        const el = postElement.querySelector(selector);
-        if (el && el.textContent.trim()) {
-          const text = cleanText(el.textContent);
+      // ── Author job title ─────────────────────────────────────
+      // Job title is in a linked-area div, first div child
+      const linkedAreas = postElement.querySelectorAll(
+        "[class*='linked-area']",
+      );
+      if (linkedAreas.length > 0) {
+        const firstLinked = linkedAreas[0];
+        const divs = firstLinked.querySelectorAll("div");
+        for (const div of divs) {
+          const text = div.innerText?.trim();
           if (
             text &&
-            !text.match(/^\d+[hdwmy]r?$/i) &&
-            !text.match(/^(1st|2nd|3rd)$/i)
+            !text.includes("•") &&
+            !text.match(/^\d+[hdwmy]/) &&
+            text.length > 3
           ) {
-            data.authorJobTitle = text;
+            data.authorJobTitle = cleanText(text);
             break;
           }
         }
       }
 
-      // Post URL
-      const postURLSelectors = [
-        'a[href*="/feed/update/"]',
-        'a[href*="activity"]',
-        '[data-urn*="activity"]',
-      ];
-      for (const selector of postURLSelectors) {
-        const el = postElement.querySelector(selector);
-        if (el) {
-          if (
-            el.href &&
-            (el.href.includes("/feed/update/") || el.href.includes("activity"))
-          ) {
-            data.postURL = el.href;
-            break;
-          } else if (el.getAttribute("data-urn")) {
-            const urn = el.getAttribute("data-urn");
-            const match = urn.match(/(activity|ugcPost):(\d+)/);
-            if (match) {
-              data.postURL = `https://www.linkedin.com/feed/update/urn:li:${match[1]}:${match[2]}/`;
-              break;
-            }
-          }
-        }
+      // ── Post URL ─────────────────────────────────────────────
+      const activityLink =
+        postElement.querySelector("a[href*='activity']") ||
+        postElement.querySelector("a[href*='/feed/update/']");
+      if (activityLink && activityLink.href) {
+        data.postURL = activityLink.href.split("?")[0];
       }
 
+      // Fallback: data-urn
       if (!data.postURL) {
         const urnEl =
           postElement.querySelector("[data-urn]") ||
           postElement.closest("[data-urn]");
         if (urnEl) {
           const urn = urnEl.getAttribute("data-urn");
-          if (urn) {
-            const match = urn.match(/(activity|ugcPost):(\d+)/);
-            if (match) {
-              data.postURL = `https://www.linkedin.com/feed/update/urn:li:${match[1]}:${match[2]}/`;
-            }
+          const match = urn?.match(/(activity|ugcPost):(\d+)/);
+          if (match) {
+            data.postURL = `https://www.linkedin.com/feed/update/urn:li:${match[1]}:${match[2]}/`;
           }
         }
       }
@@ -148,51 +124,39 @@
         data.postURL = data.authorProfileURL;
       }
 
-      // Post content
-      const contentSelectors = [
-        ".entity-result__summary",
-        ".feed-shared-text",
-        ".update-components-text",
-      ];
-      for (const selector of contentSelectors) {
-        const el = postElement.querySelector(selector);
-        if (el && el.textContent.trim()) {
-          data.postContent = cleanText(el.textContent);
+      // ── Post content (THE KEY FIX) ───────────────────────────
+      // LinkedIn uses obfuscated classes — use attribute-contains selectors
+      const contentEl =
+        postElement.querySelector("[class*='content-summary']") ||
+        postElement.querySelector("div.mh4 p") ||
+        postElement.querySelector("[class*='content-inner-container'] p");
+      if (contentEl) {
+        data.postContent = cleanText(contentEl.innerText);
+      }
+
+      // Fallback to job title if no content
+      if (!data.postContent && data.authorJobTitle) {
+        data.postContent = data.authorJobTitle;
+      }
+
+      // ── Post image ───────────────────────────────────────────
+      const imgs = postElement.querySelectorAll("img");
+      for (const img of imgs) {
+        const src = img.src || "";
+        if (src && !src.includes("data:image") && src.startsWith("http")) {
+          data.postImage = src;
           break;
         }
       }
 
-      // Post image
-      const imageSelectors = [
-        "img.entity-result__image",
-        "img.ivm-view-attr__img--centered",
-      ];
-      for (const selector of imageSelectors) {
-        const el = postElement.querySelector(selector);
-        if (el) {
-          const src = el.src || el.getAttribute("data-delayed-url");
-          if (src && !src.includes("data:image")) {
-            data.postImage = src;
-            break;
-          }
-        }
-      }
-
-      // Time since posted
-      const timeSelectors = [
-        ".entity-result__insights span",
-        ".entity-result__insights",
-        "time",
-      ];
-      for (const selector of timeSelectors) {
-        const el = postElement.querySelector(selector);
-        if (el && el.textContent.trim()) {
-          const timeText = cleanText(el.textContent);
-          const timeMatch = timeText.match(/(\d+[hdwmy]r?)/i);
-          if (timeMatch) {
-            data.timeSincePosted = timeMatch[1];
-            break;
-          }
+      // ── Time since posted ────────────────────────────────────
+      const allText = postElement.querySelectorAll("span, p, time");
+      for (const el of allText) {
+        const text = el.textContent.trim();
+        const timeMatch = text.match(/^(\d+[hdwmy]r?)\s*•/i);
+        if (timeMatch) {
+          data.timeSincePosted = timeMatch[1];
+          break;
         }
       }
 
@@ -201,30 +165,54 @@
         `${data.authorName}-${data.postContent.substring(0, 50)}`;
       return { ...data, uniqueId };
     } catch (error) {
-      console.error("Error extracting post data:", error);
+      console.error("Savely: Error extracting post data:", error);
       return null;
     }
   }
 
   function findPostContainers() {
+    // LinkedIn uses obfuscated classes — use attribute-contains and
+    // scaffold-finite-scroll which is the reliable container
     const selectors = [
-      "li.reusable-search__result-container",
-      ".reusable-search__result-container",
-      "div.entity-result",
       ".scaffold-finite-scroll__content li",
+      "[class*='reusable-search'] li",
     ];
 
     for (const selector of selectors) {
       const elements = document.querySelectorAll(selector);
-      if (elements.length > 0) return Array.from(elements);
+      // Filter out non-post items like filter pills
+      const filtered = Array.from(elements).filter(
+        (el) =>
+          !el.className.includes("search-reusables") &&
+          (el.querySelector('a[href*="/in/"]') ||
+            el.querySelector("[data-urn]")),
+      );
+      if (filtered.length > 0) {
+        console.log(
+          `Savely: Found ${filtered.length} posts using: ${selector}`,
+        );
+        return filtered;
+      }
     }
 
-    const mainList = document.querySelector(
-      ".scaffold-finite-scroll__content ul",
-    );
+    // Fallback: get all li from main
+    const mainList =
+      document.querySelector(".scaffold-finite-scroll__content ul") ||
+      document.querySelector("main ul");
     if (mainList) {
-      return Array.from(mainList.children).filter((el) => el.tagName === "LI");
+      const items = Array.from(mainList.children).filter(
+        (el) =>
+          el.tagName === "LI" &&
+          !el.className.includes("search-reusables") &&
+          el.querySelector('a[href*="/in/"]'),
+      );
+      if (items.length > 0) {
+        console.log(`Savely: Found ${items.length} posts via fallback`);
+        return items;
+      }
     }
+
+    console.log("Savely: No post containers found");
     return [];
   }
 
@@ -272,6 +260,9 @@
     try {
       sendProgress(0, 0, "Starting LinkedIn scrape...");
 
+      // Wait for page to be ready
+      await new Promise((r) => setTimeout(r, 1000));
+
       let scrollAttempts = 0;
       let noNewContentCount = 0;
       let previousCount = 0;
@@ -305,23 +296,26 @@
         sendProgress(
           scrapedPosts.size,
           CONFIG.MAX_POSTS,
-          `Found ${scrapedPosts.size} posts...`,
+          `Found ${scrapedPosts.size} posts (scroll ${scrollAttempts})...`,
         );
 
         const canScroll = await scrollToLoadMore();
-        if (!canScroll || containers.length === previousCount) {
+        if (!canScroll || scrapedPosts.size === previousCount) {
           noNewContentCount++;
         } else {
           noNewContentCount = 0;
         }
-        previousCount = containers.length;
+        previousCount = scrapedPosts.size;
       }
 
       const results = Array.from(scrapedPosts.values()).map(
         ({ uniqueId, ...post }) => post,
       );
+
+      console.log(`Savely: Scraping complete. Found ${results.length} posts.`);
       sendComplete(results);
     } catch (error) {
+      console.error("Savely: Scraping error:", error);
       sendError(`LinkedIn scraping failed: ${error.message}`);
     } finally {
       isScrapingActive = false;

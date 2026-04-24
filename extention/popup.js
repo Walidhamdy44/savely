@@ -34,7 +34,7 @@ const STORAGE = {
 };
 
 // Hardcoded API URL — change this when you deploy
-const API_URL = "http://localhost:3001";
+const API_URL = "http://localhost:3000";
 
 // State
 let scrapedData = [];

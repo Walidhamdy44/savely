@@ -2,7 +2,6 @@
 
 import { Platform } from "@prisma/client";
 import { PLATFORM_META } from "@/lib/platforms";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -16,26 +15,32 @@ export function PlatformFilter({ selected, onSelect, counts }: Props) {
 
   return (
     <div className="flex flex-wrap gap-2">
+      {/* All filter */}
       <button
         onClick={() => onSelect(undefined)}
         className={cn(
-          "flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+          "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all",
           selected === undefined
-            ? "border-foreground bg-foreground text-background"
-            : "border-border hover:bg-muted",
+            ? "bg-[#FF8C42] text-[#532200] shadow-lg shadow-[#FF8C42]/20"
+            : "bg-[#281d18] text-[#a48c7f] border border-[rgba(255,255,255,0.06)] hover:bg-[#332822] hover:text-[#f2dfd5]",
         )}
       >
         All
         {allCount > 0 && (
-          <Badge
-            variant="secondary"
-            className="h-4 rounded-full px-1.5 text-xs"
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-xs font-semibold",
+              selected === undefined
+                ? "bg-[#532200]/30 text-[#532200]"
+                : "bg-white/5 text-[#a48c7f]",
+            )}
           >
             {allCount}
-          </Badge>
+          </span>
         )}
       </button>
 
+      {/* Platform filters */}
       {Object.values(Platform).map((platform) => {
         const meta = PLATFORM_META[platform];
         const count = counts?.find((c) => c.platform === platform)?.count ?? 0;
@@ -45,20 +50,25 @@ export function PlatformFilter({ selected, onSelect, counts }: Props) {
             key={platform}
             onClick={() => onSelect(platform)}
             className={cn(
-              "flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+              "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all",
               selected === platform
-                ? "border-foreground bg-foreground text-background"
-                : "border-border hover:bg-muted",
+                ? "bg-[#FF8C42] text-[#532200] shadow-lg shadow-[#FF8C42]/20"
+                : "bg-[#281d18] text-[#a48c7f] border border-[rgba(255,255,255,0.06)] hover:bg-[#332822] hover:text-[#f2dfd5]",
             )}
           >
+            <span className={cn("h-2 w-2 rounded-full", meta.dotColor)} />
             {meta.label}
             {count > 0 && (
-              <Badge
-                variant="secondary"
-                className="h-4 rounded-full px-1.5 text-xs"
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs font-semibold",
+                  selected === platform
+                    ? "bg-[#532200]/30 text-[#532200]"
+                    : "bg-white/5 text-[#a48c7f]",
+                )}
               >
                 {count}
-              </Badge>
+              </span>
             )}
           </button>
         );

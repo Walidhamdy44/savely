@@ -6,7 +6,11 @@
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [
     "https://www.linkedin.com/*",
-    "https://www.youtube.com/*"
+    "https://www.youtube.com/*",
+    "http://localhost/*",
+    "http://localhost:3000/*",
+    "https://*.vercel.app/*",
+    "<all_urls>"
   ],
   "action": {
     "default_popup": "popup.html",

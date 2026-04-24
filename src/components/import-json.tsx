@@ -4,13 +4,6 @@ import { useState, useRef } from "react";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { toast } from "sonner";
 import { Upload, FileJson, Loader2 } from "lucide-react";
 
@@ -43,7 +36,6 @@ function extractLinkedInId(url: string): string {
   if (activityMatch) {
     return `li_${activityMatch[1]}`;
   }
-  // Fallback to hash of URL
   return `li_${url.split("/").pop()?.slice(0, 16) || Date.now()}`;
 }
 
@@ -81,7 +73,6 @@ export function ImportJson() {
         return;
       }
 
-      // Detect platform based on data structure
       const isLinkedIn =
         data[0]?.authorName !== undefined || data[0]?.postURL !== undefined;
       const isYouTube =
@@ -91,7 +82,6 @@ export function ImportJson() {
           data[0]?.duration !== undefined);
 
       if (isLinkedIn) {
-        // Process LinkedIn posts
         for (const post of data as LinkedInPost[]) {
           try {
             const externalId = extractLinkedInId(post.postURL || "");
@@ -99,7 +89,10 @@ export function ImportJson() {
               platform: "linkedin",
               externalId,
               title: post.authorName || "LinkedIn Post",
-              description: post.postContent?.slice(0, 2000),
+              description: (post.postContent || post.authorJobTitle)?.slice(
+                0,
+                2000,
+              ),
               url: post.postURL,
               thumbnail: post.postImage || undefined,
               metadata: {
@@ -115,7 +108,6 @@ export function ImportJson() {
           }
         }
       } else if (isYouTube) {
-        // Process YouTube videos
         for (const video of data as YouTubeVideo[]) {
           try {
             const videoUrl = video.videoUrl || video.url || "";
@@ -146,7 +138,6 @@ export function ImportJson() {
         return;
       }
 
-      // Invalidate queries to refresh the posts list
       queryClient.invalidateQueries({ queryKey: trpc.posts.getAll.queryKey() });
       queryClient.invalidateQueries({ queryKey: trpc.posts.counts.queryKey() });
 
@@ -195,69 +186,79 @@ export function ImportJson() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileJson className="h-5 w-5" />
+    <div className="rounded-3xl border border-[rgba(255,255,255,0.04)] bg-[#281d18] p-6">
+      {/* Header */}
+      <div className="space-y-1 pb-6">
+        <h2 className="flex items-center gap-2.5 text-lg font-semibold text-[#f2dfd5]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#A855F7]/10">
+            <FileJson className="h-4 w-4 text-[#A855F7]" />
+          </div>
           Import from JSON
-        </CardTitle>
-        <CardDescription>
+        </h2>
+        <p className="text-sm text-[#a48c7f]">
           Upload a JSON file exported from Savely or similar extensions
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div
-          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-            dragActive
-              ? "border-primary bg-primary/5"
-              : "border-muted-foreground/25 hover:border-muted-foreground/50"
-          }`}
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            onChange={handleChange}
-            className="hidden"
-            id="json-upload"
-          />
+        </p>
+      </div>
 
-          {isImporting ? (
-            <div className="flex flex-col items-center gap-2">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">
-                Importing posts...
-              </p>
+      {/* Drop zone */}
+      <div
+        className={`rounded-2xl border-2 border-dashed p-10 text-center transition-all ${
+          dragActive
+            ? "border-[#FF8C42] bg-[#FF8C42]/5"
+            : "border-[#564338] hover:border-[#a48c7f] hover:bg-[#1b110c]"
+        }`}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleChange}
+          className="hidden"
+          id="json-upload"
+        />
+
+        {isImporting ? (
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FF8C42]/10">
+              <Loader2 className="h-6 w-6 animate-spin text-[#FF8C42]" />
             </div>
-          ) : (
-            <label htmlFor="json-upload" className="cursor-pointer">
-              <div className="flex flex-col items-center gap-2">
-                <Upload className="h-8 w-8 text-muted-foreground" />
-                <p className="text-sm font-medium">
+            <p className="text-sm text-[#a48c7f]">Importing posts...</p>
+          </div>
+        ) : (
+          <label htmlFor="json-upload" className="cursor-pointer">
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#332822]">
+                <Upload className="h-6 w-6 text-[#a48c7f]" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-[#f2dfd5]">
                   Drop your JSON file here or click to browse
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-[#564338]">
                   Supports LinkedIn and YouTube exports from Savely
                 </p>
               </div>
-            </label>
-          )}
-        </div>
+            </div>
+          </label>
+        )}
+      </div>
 
-        <div className="mt-4 text-sm text-muted-foreground">
-          <p className="font-medium mb-2">How to export from Savely:</p>
-          <ol className="list-decimal list-inside space-y-1">
-            <li>Open Savely extension on LinkedIn or YouTube</li>
-            <li>Click &quot;JSON&quot; to export as JSON format</li>
-            <li>Click &quot;Download&quot; to save the file</li>
-            <li>Upload the file here</li>
-          </ol>
-        </div>
-      </CardContent>
-    </Card>
+      {/* Instructions */}
+      <div className="mt-5 rounded-2xl bg-[#1b110c] p-5 text-sm text-[#a48c7f]">
+        <p className="font-medium text-[#ddc1b3] mb-3">
+          How to export from Savely:
+        </p>
+        <ol className="list-decimal list-inside space-y-1.5 text-[#564338]">
+          <li>Open Savely extension on LinkedIn or YouTube</li>
+          <li>Click &quot;JSON&quot; to export as JSON format</li>
+          <li>Click &quot;Download&quot; to save the file</li>
+          <li>Upload the file here</li>
+        </ol>
+      </div>
+    </div>
   );
 }

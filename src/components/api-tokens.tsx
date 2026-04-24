@@ -26,14 +26,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Copy, Key, Plus, Trash2, Check } from "lucide-react";
 
@@ -103,150 +95,185 @@ export function ApiTokens() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
-              API Tokens
-            </CardTitle>
-            <CardDescription>
-              Create tokens to sync data from the browser extension
-            </CardDescription>
-          </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger render={<Button size="sm" />}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Token
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create API Token</DialogTitle>
-                <DialogDescription>
-                  Create a new token to use with the browser extension. You will
-                  only see the token once.
-                </DialogDescription>
-              </DialogHeader>
-
-              {!createdToken ? (
-                <>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Token Name</Label>
-                      <Input
-                        id="name"
-                        placeholder="e.g., Chrome Extension"
-                        value={newTokenName}
-                        onChange={(e) => setNewTokenName(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={handleCloseCreate}>
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleCreate}
-                      disabled={!newTokenName.trim() || createToken.isPending}
-                    >
-                      {createToken.isPending ? "Creating..." : "Create Token"}
-                    </Button>
-                  </DialogFooter>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-4 py-4">
-                    <div className="rounded-md bg-muted p-4">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Copy this token now. You won&apos;t be able to see it
-                        again!
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <code className="flex-1 text-sm bg-background p-2 rounded border break-all">
-                          {createdToken}
-                        </code>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={handleCopy}
-                        >
-                          {copied ? (
-                            <Check className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button onClick={handleCloseCreate}>Done</Button>
-                  </DialogFooter>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading tokens...</p>
-        ) : tokens?.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No tokens yet. Create one to start syncing from the extension.
+    <div className="rounded-3xl border border-[rgba(255,255,255,0.04)] bg-[#281d18] p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-6">
+        <div className="space-y-1">
+          <h2 className="flex items-center gap-2.5 text-lg font-semibold text-[#f2dfd5]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FF8C42]/10">
+              <Key className="h-4 w-4 text-[#FF8C42]" />
+            </div>
+            API Tokens
+          </h2>
+          <p className="text-sm text-[#a48c7f]">
+            Create tokens to sync data from the browser extension
           </p>
-        ) : (
-          <div className="space-y-3">
-            {tokens?.map((token) => (
-              <div
-                key={token.id}
-                className="flex items-center justify-between p-3 rounded-lg border"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{token.name}</span>
-                    {token.expiresAt &&
-                      new Date(token.expiresAt) < new Date() && (
-                        <Badge variant="destructive">Expired</Badge>
-                      )}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Created {formatDate(token.createdAt)} · Last used{" "}
-                    {token.lastUsed ? formatDate(token.lastUsed) : "never"}
+        </div>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger
+            render={
+              <Button className="gap-2 rounded-xl bg-[#FF8C42] text-[#532200] font-semibold hover:bg-[#FFB68D]">
+                <Plus className="h-4 w-4" />
+                New Token
+              </Button>
+            }
+          />
+          <DialogContent className="border-[rgba(255,255,255,0.06)] bg-[#281d18]">
+            <DialogHeader>
+              <DialogTitle className="text-[#f2dfd5]">
+                Create API Token
+              </DialogTitle>
+              <DialogDescription className="text-[#a48c7f]">
+                Create a new token to use with the browser extension. You will
+                only see the token once.
+              </DialogDescription>
+            </DialogHeader>
+
+            {!createdToken ? (
+              <>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="text-sm text-[#a48c7f]">
+                      Token Name
+                    </Label>
+                    <Input
+                      id="name"
+                      placeholder="e.g., Chrome Extension"
+                      value={newTokenName}
+                      onChange={(e) => setNewTokenName(e.target.value)}
+                      className="rounded-xl border-[rgba(255,255,255,0.06)] bg-[#1b110c] text-[#f2dfd5] placeholder:text-[#564338] focus:border-[#FF8C42]"
+                    />
                   </div>
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger
-                    render={<Button variant="ghost" size="icon" />}
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={handleCloseCreate}
+                    className="rounded-xl border-[rgba(255,255,255,0.06)] bg-transparent text-[#a48c7f] hover:bg-[#332822] hover:text-[#f2dfd5]"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete Token</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to delete &quot;{token.name}
-                        &quot;? Any extensions using this token will stop
-                        working.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => deleteToken.mutate({ id: token.id })}
-                        variant="destructive"
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCreate}
+                    disabled={!newTokenName.trim() || createToken.isPending}
+                    className="rounded-xl bg-[#FF8C42] text-[#532200] font-semibold hover:bg-[#FFB68D]"
+                  >
+                    {createToken.isPending ? "Creating..." : "Create Token"}
+                  </Button>
+                </DialogFooter>
+              </>
+            ) : (
+              <>
+                <div className="space-y-4 py-4">
+                  <div className="rounded-2xl bg-[#1b110c] p-5">
+                    <p className="text-sm text-[#a48c7f] mb-3">
+                      Copy this token now. You won&apos;t be able to see it
+                      again!
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-sm bg-[#332822] text-[#FFB68D] p-3 rounded-xl border border-[rgba(255,255,255,0.06)] break-all font-mono">
+                        {createdToken}
+                      </code>
+                      <Button
+                        size="icon"
+                        onClick={handleCopy}
+                        className="h-10 w-10 shrink-0 rounded-xl bg-[#FF8C42]/10 text-[#FF8C42] hover:bg-[#FF8C42]/20"
                       >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                        {copied ? (
+                          <Check className="h-4 w-4 text-green-400" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    onClick={handleCloseCreate}
+                    className="rounded-xl bg-[#FF8C42] text-[#532200] font-semibold hover:bg-[#FFB68D]"
+                  >
+                    Done
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Token list */}
+      {isLoading ? (
+        <p className="text-sm text-[#564338]">Loading tokens...</p>
+      ) : tokens?.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-[#564338] py-10 text-center">
+          <p className="text-sm text-[#564338]">
+            No tokens yet. Create one to start syncing from the extension.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {tokens?.map((token) => (
+            <div
+              key={token.id}
+              className="flex items-center justify-between rounded-2xl border border-[rgba(255,255,255,0.04)] bg-[#1b110c] p-4 transition-colors hover:bg-[#231914]"
+            >
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <span className="font-medium text-[#f2dfd5]">
+                    {token.name}
+                  </span>
+                  {token.expiresAt &&
+                    new Date(token.expiresAt) < new Date() && (
+                      <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-400 border border-red-500/20">
+                        Expired
+                      </span>
+                    )}
+                </div>
+                <div className="text-xs text-[#564338]">
+                  Created {formatDate(token.createdAt)} · Last used{" "}
+                  {token.lastUsed ? formatDate(token.lastUsed) : "never"}
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              <AlertDialog>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-[#564338] hover:bg-red-500/10 hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  }
+                />
+                <AlertDialogContent className="border-[rgba(255,255,255,0.06)] bg-[#281d18]">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-[#f2dfd5]">
+                      Delete Token
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="text-[#a48c7f]">
+                      Are you sure you want to delete &quot;{token.name}
+                      &quot;? Any extensions using this token will stop working.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="rounded-xl border-[rgba(255,255,255,0.06)] bg-transparent text-[#a48c7f] hover:bg-[#332822] hover:text-[#f2dfd5]">
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteToken.mutate({ id: token.id })}
+                      className="rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

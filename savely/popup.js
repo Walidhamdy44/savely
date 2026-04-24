@@ -138,7 +138,11 @@ connectBtn.addEventListener("click", async () => {
     showConnected(data);
     detectPlatform();
   } catch (err) {
-    showStatus(connectStatus, err.message, "error");
+    const msg =
+      err.message === "Failed to fetch"
+        ? `Cannot reach ${apiUrl}. Make sure the app is running and the URL is correct.`
+        : err.message;
+    showStatus(connectStatus, msg, "error");
   } finally {
     connectBtn.disabled = false;
     connectBtn.textContent = "Connect";
@@ -262,7 +266,11 @@ syncBtn.addEventListener("click", async () => {
       "success",
     );
   } catch (err) {
-    showStatus(syncStatus, err.message, "error");
+    const msg =
+      err.message === "Failed to fetch"
+        ? "Cannot reach the server. Make sure the app is running."
+        : err.message;
+    showStatus(syncStatus, msg, "error");
   } finally {
     syncBtn.disabled = false;
     syncBtn.innerHTML = '<span class="btn-icon">↑</span> Sync to App';
@@ -273,78 +281,183 @@ syncBtn.addEventListener("click", async () => {
 function scrapeLinkedIn() {
   const posts = [];
 
-  // Main feed posts / saved items
-  const feedPosts = document.querySelectorAll(
-    ".feed-shared-update-v2, [data-urn*='activity'], .occludable-update, .reusable-search__result-container",
+  // LinkedIn uses obfuscated/concatenated class names, so we MUST use
+  // attribute-contains selectors [class*='...'] instead of .class selectors
+
+  // Strategy 1: Saved posts page — uses scaffold-finite-scroll with li items
+  const savedPostItems = document.querySelectorAll(
+    ".scaffold-finite-scroll__content li, [class*='reusable-search'] li",
   );
 
-  feedPosts.forEach((post) => {
-    try {
-      const authorEl =
-        post.querySelector(
-          ".update-components-actor__name .hoverable-link-text",
-        ) ||
-        post.querySelector(".update-components-actor__name") ||
-        post.querySelector(".feed-shared-actor__name");
-      const authorName = authorEl?.innerText?.trim() || "";
+  if (savedPostItems.length > 0) {
+    savedPostItems.forEach((item) => {
+      try {
+        // Skip filter pills (they're also <li> elements)
+        if (item.className.includes("search-reusables")) return;
 
-      const authorLinkEl =
-        post.querySelector(".update-components-actor__meta-link") ||
-        post.querySelector(".feed-shared-actor__container a") ||
-        post.querySelector("a[href*='/in/']");
-      const authorProfileURL = authorLinkEl?.href || "";
+        // Author name — find span with aria-hidden="true" inside a profile link
+        let authorName = "";
+        const nameSpans = item.querySelectorAll(
+          'a[href*="/in/"] span[aria-hidden="true"]',
+        );
+        for (const span of nameSpans) {
+          const text = span.innerText.trim();
+          if (
+            text &&
+            text.length > 1 &&
+            !text.includes("View") &&
+            !text.includes("•")
+          ) {
+            authorName = text;
+            break;
+          }
+        }
 
-      const jobEl =
-        post.querySelector(".update-components-actor__description") ||
-        post.querySelector(".feed-shared-actor__description");
-      const authorJobTitle = jobEl?.innerText?.trim() || "";
+        // Profile URL
+        const profileEl = item.querySelector('a[href*="/in/"]');
+        const authorProfileURL = profileEl?.href?.split("?")[0] || "";
 
-      // Post URL from activity URN
-      let postURL = "";
-      const urn =
-        post.getAttribute("data-urn") ||
-        post.querySelector("[data-urn]")?.getAttribute("data-urn") ||
-        "";
-      const activityMatch = urn.match(/activity:(\d+)/);
-      if (activityMatch) {
-        postURL = `https://www.linkedin.com/feed/update/urn:li:activity:${activityMatch[1]}`;
+        // Job title — in the linked-area div after the name
+        let authorJobTitle = "";
+        const linkedAreas = item.querySelectorAll("[class*='linked-area']");
+        if (linkedAreas.length > 0) {
+          // First linked-area usually has the job title
+          const firstLinked = linkedAreas[0];
+          const divs = firstLinked.querySelectorAll("div");
+          for (const div of divs) {
+            const text = div.innerText.trim();
+            if (
+              text &&
+              !text.includes("•") &&
+              !text.match(/^\d+[hdwmy]/) &&
+              text.length > 3
+            ) {
+              authorJobTitle = text;
+              break;
+            }
+          }
+        }
+
+        // Post URL — activity link
+        let postURL = "";
+        const activityLink =
+          item.querySelector("a[href*='activity']") ||
+          item.querySelector("a[href*='/feed/update/']");
+        if (activityLink?.href) {
+          postURL = activityLink.href.split("?")[0];
+        }
+        if (!postURL) postURL = authorProfileURL;
+
+        // POST CONTENT — the key fix: use [class*='content-summary']
+        let postContent = "";
+        const contentEl = item.querySelector("[class*='content-summary']");
+        if (contentEl) {
+          postContent = contentEl.innerText.trim();
+        }
+        // Fallback: try any <p> inside div.mh4
+        if (!postContent) {
+          const mh4 = item.querySelector("div.mh4");
+          if (mh4) {
+            const p = mh4.querySelector("p");
+            if (p) postContent = p.innerText.trim();
+          }
+        }
+
+        // Image — profile photo or post image
+        let postImage = "";
+        const imgs = item.querySelectorAll("img");
+        for (const img of imgs) {
+          const src = img.src || "";
+          if (src && !src.includes("data:image") && src.startsWith("http")) {
+            postImage = src;
+            break;
+          }
+        }
+
+        if (authorName || postURL) {
+          posts.push({
+            authorName,
+            authorProfileURL,
+            authorJobTitle,
+            postURL,
+            postContent: postContent || authorJobTitle,
+            postImage,
+            timeSincePosted: "",
+            scrapedAt: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.error("Savely scrape error:", e);
       }
-      if (!postURL) {
-        const linkEl = post.querySelector("a[href*='activity']");
-        postURL = linkEl?.href || authorProfileURL || window.location.href;
+    });
+  }
+
+  // Strategy 2: Feed page — posts have full content visible
+  if (posts.length === 0) {
+    const feedPosts = document.querySelectorAll(
+      ".feed-shared-update-v2, [data-urn*='activity'], .occludable-update",
+    );
+
+    feedPosts.forEach((post) => {
+      try {
+        const authorEl =
+          post.querySelector("[class*='update-components-actor__name']") ||
+          post.querySelector("[class*='feed-shared-actor__name']");
+        const authorName = authorEl?.innerText?.trim() || "";
+
+        const authorLinkEl = post.querySelector('a[href*="/in/"]');
+        const authorProfileURL = authorLinkEl?.href || "";
+
+        const jobEl =
+          post.querySelector(
+            "[class*='update-components-actor__description']",
+          ) || post.querySelector("[class*='feed-shared-actor__description']");
+        const authorJobTitle = jobEl?.innerText?.trim() || "";
+
+        let postURL = "";
+        const urn =
+          post.getAttribute("data-urn") ||
+          post.querySelector("[data-urn]")?.getAttribute("data-urn") ||
+          "";
+        const activityMatch = urn.match(/activity:(\d+)/);
+        if (activityMatch) {
+          postURL = `https://www.linkedin.com/feed/update/urn:li:activity:${activityMatch[1]}`;
+        }
+        if (!postURL) {
+          const linkEl = post.querySelector("a[href*='activity']");
+          postURL = linkEl?.href || authorProfileURL || window.location.href;
+        }
+
+        const contentEl =
+          post.querySelector("[class*='feed-shared-update-v2__description']") ||
+          post.querySelector("[class*='update-components-text']") ||
+          post.querySelector("[class*='feed-shared-text']") ||
+          post.querySelector("[class*='break-words']");
+        const postContent =
+          contentEl?.innerText?.trim() || authorJobTitle || "";
+
+        const imgEl =
+          post.querySelector("[class*='feed-shared-image'] img") ||
+          post.querySelector("img");
+        const postImage = imgEl?.src || "";
+
+        if (authorName || postContent) {
+          posts.push({
+            authorName,
+            authorProfileURL,
+            authorJobTitle,
+            postURL,
+            postContent,
+            postImage,
+            timeSincePosted: "",
+            scrapedAt: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.error("Savely scrape error:", e);
       }
-
-      // Content
-      const contentEl =
-        post.querySelector(".feed-shared-update-v2__description") ||
-        post.querySelector(".update-components-text") ||
-        post.querySelector(".feed-shared-text");
-      const postContent = contentEl?.innerText?.trim() || authorJobTitle || "";
-
-      // Image
-      const imgEl =
-        post.querySelector(".update-components-actor__image img") ||
-        post.querySelector(".feed-shared-actor__avatar img") ||
-        post.querySelector(".presence-entity__image") ||
-        post.querySelector("img");
-      const postImage = imgEl?.src || "";
-
-      if (authorName || postContent) {
-        posts.push({
-          authorName,
-          authorProfileURL,
-          authorJobTitle,
-          postURL,
-          postContent,
-          postImage,
-          timeSincePosted: "",
-          scrapedAt: new Date().toISOString(),
-        });
-      }
-    } catch (e) {
-      console.error("Savely scrape error:", e);
-    }
-  });
+    });
+  }
 
   // Deduplicate by postURL
   const seen = new Set();

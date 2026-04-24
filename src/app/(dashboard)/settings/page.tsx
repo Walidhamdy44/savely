@@ -7,18 +7,20 @@ export default async function SettingsPage() {
 
   return (
     <HydrateClient>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground">
+      <div className="space-y-8">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight text-[#f2dfd5]">
+            Settings
+          </h1>
+          <p className="text-sm text-[#a48c7f]">
             Import your saved content and manage API tokens.
           </p>
         </div>
 
-        {/* Import JSON - Primary way to sync */}
+        {/* Import JSON */}
         <ImportJson />
 
-        {/* API Tokens - For advanced/automated sync */}
+        {/* API Tokens */}
         <ApiTokens />
       </div>
     </HydrateClient>

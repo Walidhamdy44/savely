@@ -3,6 +3,23 @@ import { prisma } from "@/lib/prisma";
 import { createHash } from "crypto";
 import { Platform, SourceType } from "@prisma/client";
 
+// CORS headers for browser extension requests
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+// Handle preflight requests
+export async function OPTIONS() {
+  return NextResponse.json(null, { headers: corsHeaders });
+}
+
+// Helper to add CORS headers to all responses
+function jsonResponse(body: unknown, init?: { status?: number }) {
+  return NextResponse.json(body, { ...init, headers: corsHeaders });
+}
+
 // Hash token for comparison
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -65,7 +82,7 @@ export async function POST(request: NextRequest) {
     // Get token from Authorization header
     const authHeader = request.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json(
+      return jsonResponse(
         { error: "Missing or invalid Authorization header" },
         { status: 401 },
       );
@@ -81,12 +98,12 @@ export async function POST(request: NextRequest) {
     });
 
     if (!apiToken) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+      return jsonResponse({ error: "Invalid token" }, { status: 401 });
     }
 
     // Check expiration
     if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
-      return NextResponse.json({ error: "Token expired" }, { status: 401 });
+      return jsonResponse({ error: "Token expired" }, { status: 401 });
     }
 
     // Update last used
@@ -101,6 +118,7 @@ export async function POST(request: NextRequest) {
 
     let savedCount = 0;
     let skippedCount = 0;
+    const errors: string[] = [];
 
     if (body.platform === "linkedin") {
       // Process LinkedIn posts
@@ -121,7 +139,10 @@ export async function POST(request: NextRequest) {
               platform: Platform.linkedin,
               externalId,
               title: post.authorName || "LinkedIn Post",
-              description: post.postContent?.slice(0, 2000),
+              description: (post.postContent || post.authorJobTitle)?.slice(
+                0,
+                2000,
+              ),
               url: post.postURL,
               thumbnail: post.postImage || null,
               authorName: post.authorName,
@@ -136,7 +157,10 @@ export async function POST(request: NextRequest) {
             },
             update: {
               title: post.authorName || "LinkedIn Post",
-              description: post.postContent?.slice(0, 2000),
+              description: (post.postContent || post.authorJobTitle)?.slice(
+                0,
+                2000,
+              ),
               thumbnail: post.postImage || null,
               authorName: post.authorName,
               metadata: {
@@ -198,7 +222,6 @@ export async function POST(request: NextRequest) {
       }
     } else if (body.platform === "instagram") {
       // Process Instagram posts
-      const errors: string[] = [];
       for (const post of body.posts) {
         // Support both Savely and Thunderbit JSON formats
         const postURL = post.postURL || post["Post URL"] || "";
@@ -278,13 +301,13 @@ export async function POST(request: NextRequest) {
         console.error("Instagram sync errors (first 3):", errors);
       }
     } else {
-      return NextResponse.json(
+      return jsonResponse(
         { error: "Invalid platform. Supported: linkedin, youtube, instagram" },
         { status: 400 },
       );
     }
 
-    return NextResponse.json({
+    return jsonResponse({
       success: true,
       saved: savedCount,
       skipped: skippedCount,
@@ -293,10 +316,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Sync error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return jsonResponse({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -304,7 +324,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return NextResponse.json(
+    return jsonResponse(
       { error: "Missing or invalid Authorization header" },
       { status: 401 },
     );
@@ -319,14 +339,14 @@ export async function GET(request: NextRequest) {
   });
 
   if (!apiToken) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    return jsonResponse({ error: "Invalid token" }, { status: 401 });
   }
 
   if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
-    return NextResponse.json({ error: "Token expired" }, { status: 401 });
+    return jsonResponse({ error: "Token expired" }, { status: 401 });
   }
 
-  return NextResponse.json({
+  return jsonResponse({
     valid: true,
     user: apiToken.User.username || apiToken.User.email,
     tokenName: apiToken.name,

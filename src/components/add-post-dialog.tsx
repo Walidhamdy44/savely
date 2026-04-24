@@ -58,7 +58,6 @@ export function AddPostDialog() {
   );
 
   function onSubmit(values: FormValues) {
-    // Generate a deterministic externalId from the URL for manual posts
     const externalId = btoa(values.url).slice(0, 32);
 
     saveMutation.mutate({
@@ -78,86 +77,105 @@ export function AddPostDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button size="sm" className="gap-1.5">
+          <Button className="gap-2 rounded-xl bg-[#FF8C42] px-5 text-[#532200] font-semibold hover:bg-[#FFB68D] shadow-lg shadow-[#FF8C42]/20">
             <Plus className="h-4 w-4" />
             Add link
           </Button>
         }
       />
 
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="border-[rgba(255,255,255,0.06)] bg-[#281d18] sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Save a link manually</DialogTitle>
+          <DialogTitle className="text-[#f2dfd5]">
+            Save a link manually
+          </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title" className="text-sm text-[#a48c7f]">
+              Title
+            </Label>
             <Input
               id="title"
               placeholder="Article title"
+              className="rounded-xl border-[rgba(255,255,255,0.06)] bg-[#1b110c] text-[#f2dfd5] placeholder:text-[#564338] focus:border-[#FF8C42] focus:ring-[#FF8C42]/20"
               {...form.register("title")}
             />
             {form.formState.errors.title && (
-              <p className="text-sm text-destructive">
+              <p className="text-sm text-red-400">
                 {form.formState.errors.title.message}
               </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="url">URL</Label>
+            <Label htmlFor="url" className="text-sm text-[#a48c7f]">
+              URL
+            </Label>
             <Input
               id="url"
               placeholder="https://example.com/article"
               type="url"
+              className="rounded-xl border-[rgba(255,255,255,0.06)] bg-[#1b110c] text-[#f2dfd5] placeholder:text-[#564338] focus:border-[#FF8C42] focus:ring-[#FF8C42]/20"
               {...form.register("url")}
             />
             {form.formState.errors.url && (
-              <p className="text-sm text-destructive">
+              <p className="text-sm text-red-400">
                 {form.formState.errors.url.message}
               </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description (optional)</Label>
+            <Label htmlFor="description" className="text-sm text-[#a48c7f]">
+              Description (optional)
+            </Label>
             <Input
               id="description"
               placeholder="A brief note about this link"
+              className="rounded-xl border-[rgba(255,255,255,0.06)] bg-[#1b110c] text-[#f2dfd5] placeholder:text-[#564338] focus:border-[#FF8C42] focus:ring-[#FF8C42]/20"
               {...form.register("description")}
             />
             {form.formState.errors.description && (
-              <p className="text-sm text-destructive">
+              <p className="text-sm text-red-400">
                 {form.formState.errors.description.message}
               </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="thumbnail">Thumbnail URL (optional)</Label>
+            <Label htmlFor="thumbnail" className="text-sm text-[#a48c7f]">
+              Thumbnail URL (optional)
+            </Label>
             <Input
               id="thumbnail"
               placeholder="https://example.com/image.jpg"
               type="url"
+              className="rounded-xl border-[rgba(255,255,255,0.06)] bg-[#1b110c] text-[#f2dfd5] placeholder:text-[#564338] focus:border-[#FF8C42] focus:ring-[#FF8C42]/20"
               {...form.register("thumbnail")}
             />
             {form.formState.errors.thumbnail && (
-              <p className="text-sm text-destructive">
+              <p className="text-sm text-red-400">
                 {form.formState.errors.thumbnail.message}
               </p>
             )}
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-3 pt-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => setOpen(false)}
+              className="rounded-xl border-[rgba(255,255,255,0.06)] bg-transparent text-[#a48c7f] hover:bg-[#332822] hover:text-[#f2dfd5]"
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={saveMutation.isPending}>
+            <Button
+              type="submit"
+              disabled={saveMutation.isPending}
+              className="rounded-xl bg-[#FF8C42] text-[#532200] font-semibold hover:bg-[#FFB68D]"
+            >
               {saveMutation.isPending ? "Saving…" : "Save"}
             </Button>
           </div>
