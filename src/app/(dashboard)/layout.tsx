@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, Settings } from "lucide-react";
 
 export default async function DashboardLayout({
   children,
@@ -17,13 +17,30 @@ export default async function DashboardLayout({
       {/* Top nav */}
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 font-semibold tracking-tight"
-          >
-            <LayoutDashboard className="h-5 w-5" />
-            Social Aggregator
-          </Link>
+          <div className="flex items-center gap-6">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2 font-semibold tracking-tight"
+            >
+              <LayoutDashboard className="h-5 w-5" />
+              Social Aggregator
+            </Link>
+            <nav className="flex items-center gap-4 text-sm">
+              <Link
+                href="/dashboard"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Posts
+              </Link>
+              <Link
+                href="/settings"
+                className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            </nav>
+          </div>
           <UserButton />
         </div>
       </header>

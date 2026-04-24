@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Savely</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <span class="logo-icon">📚</span>
+        <div>
+          <h1>Savely</h1>
+          <p class="subtitle">Export your saved content.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Setup Section -->
+    <div id="setup-section">
+      <div class="section">
+        <label class="label">API URL</label>
+        <input type="text" id="api-url" placeholder="http://localhost:3000" />
+        <label class="label">API Token</label>
+        <input
+          type="password"
+          id="api-token"
+          placeholder="sav_xxxxxxxxxxxxxxxx"
+        />
+        <button class="btn btn-primary" id="connect-btn">Connect</button>
+        <div id="connect-status" class="status hidden"></div>
+      </div>
+    </div>
+
+    <!-- Connected Section -->
+    <div id="connected-section" class="hidden">
+      <!-- Connection info -->
+      <div class="section connection-bar">
+        <div class="connected-info">
+          <span class="dot green"></span>
+          <span id="user-info">Connected</span>
+        </div>
+        <button class="btn btn-sm btn-ghost" id="disconnect-btn">
+          Disconnect
+        </button>
+      </div>
+
+      <!-- Platform detection -->
+      <div class="section">
+        <div id="platform-badge" class="platform-badge hidden">
+          <span id="platform-icon"></span>
+          <span id="platform-name"></span>
+        </div>
+        <p id="platform-msg" class="hint">
+          Navigate to LinkedIn or YouTube to get started.
+        </p>
+      </div>
+
+      <!-- Results -->
+      <div id="results-section" class="section hidden">
+        <div class="results-header">
+          <span>Results</span>
+          <span id="results-count" class="badge">0</span>
+        </div>
+        <div id="results-list" class="results-list"></div>
+        <button class="btn btn-primary" id="sync-btn">
+          <span class="btn-icon">↑</span> Sync to App
+        </button>
+        <div id="sync-status" class="status hidden"></div>
+      </div>
+
+      <!-- Scrape button -->
+      <div class="section">
+        <button class="btn btn-secondary" id="scrape-btn" disabled>
+          <span class="btn-icon">🔍</span> Scrape This Page
+        </button>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

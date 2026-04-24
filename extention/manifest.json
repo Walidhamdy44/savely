@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Savely",
+  "version": "1.0",
+  "description": "Scrape and export your saved content from LinkedIn and YouTube",
+  "permissions": ["activeTab", "scripting", "downloads", "storage"],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://www.youtube.com/*",
+    "https://www.instagram.com/*",
+    "http://localhost:3000/*",
+    "http://localhost:3001/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.svg",
+      "48": "icons/icon48.svg",
+      "128": "icons/icon128.svg"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/my-items/saved-posts/*"],
+      "js": ["content-linkedin.js"]
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/playlist?list=WL",
+        "https://www.youtube.com/playlist?list=*",
+        "https://www.youtube.com/feed/playlists"
+      ],
+      "js": ["content-youtube.js"]
+    },
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["content-instagram.js"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.svg",
+    "48": "icons/icon48.svg",
+    "128": "icons/icon128.svg"
+  }
+}

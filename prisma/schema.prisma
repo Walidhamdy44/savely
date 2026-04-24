@@ -6,34 +6,22 @@ datasource db {
   provider = "postgresql"
 }
 
-// Supported platforms — only those with accessible saved-content APIs
-// youtube: YouTube Data API v3 (liked videos, playlists)
-// github: GitHub API v4 (starred repos)
-// manual: user-added links (no external API required)
-enum Platform {
-  youtube
-  github
-  manual
-}
-
 model User {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  email     String   @unique
-  username  String?
-  imageUrl  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  savedPosts SavedPost[]
+  id         String      @id @default(cuid())
+  clerkId    String      @unique
+  email      String      @unique
+  username   String?
+  imageUrl   String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
   accounts   Account[]
+  ApiToken   ApiToken[]
+  savedPosts SavedPost[]
 }
 
-// Stores OAuth tokens for connected platforms (encrypted at rest in production)
 model Account {
   id           String    @id @default(cuid())
   userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   platform     Platform
   accessToken  String
   refreshToken String?
@@ -41,15 +29,15 @@ model Account {
   scope        String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, platform])
   @@index([userId])
 }
 
 model SavedPost {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   platform    Platform
   externalId  String
   title       String
@@ -57,11 +45,45 @@ model SavedPost {
   url         String
   thumbnail   String?
   metadata    Json?
-  savedAt     DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  savedAt     DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  authorName  String?
+  sourceType  SourceType @default(manual)
+  note        String?
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, platform, externalId])
+  @@unique([userId, url])
   @@index([userId, platform])
   @@index([userId, savedAt(sort: Desc)])
+}
+
+model ApiToken {
+  id        String    @id
+  userId    String
+  name      String
+  token     String    @unique
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  User      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+enum Platform {
+  youtube
+  github
+  manual
+  linkedin
+  instagram
+}
+
+enum SourceType {
+  manual
+  extension
+  youtube_liked
+  github_starred
 }
