@@ -161,6 +161,163 @@ export const postsRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  // ── fetchLinkedInContent ──────────────────────────────────────────────────
+  // Fetch full LinkedIn post content via ScrapingDog API
+  fetchLinkedInContent: protectedProcedure
+    .input(z.object({ postId: z.string().cuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const post = await ctx.prisma.savedPost.findFirst({
+        where: { id: input.postId, userId: ctx.user.id, platform: "linkedin" },
+      });
+      if (!post) throw new Error("Post not found");
+
+      // Extract the activity ID from the URL
+      const activityMatch = post.url.match(/activity[:\-](\d+)/);
+      if (!activityMatch) {
+        throw new Error("Could not extract LinkedIn activity ID from URL");
+      }
+
+      const linkedInPostId = activityMatch[1];
+      const apiKey = process.env.SCRAPINGDOG_API_KEY;
+      if (!apiKey) throw new Error("ScrapingDog API key not configured");
+
+      // ScrapingDog expects just the numeric activity ID
+      const url = new URL("https://api.scrapingdog.com/profile/post");
+      url.searchParams.set("api_key", apiKey);
+      url.searchParams.set("id", linkedInPostId);
+      url.searchParams.set("type", "profile");
+
+      console.log("=== ScrapingDog Request ===");
+      console.log("Activity ID:", linkedInPostId);
+      console.log("API URL:", url.toString());
+
+      const res = await fetch(url.toString());
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => "");
+        console.error("=== ScrapingDog Error ===");
+        console.error("Status:", res.status);
+        console.error("Body:", errorBody);
+        throw new Error(`ScrapingDog API error: ${res.status} - ${errorBody}`);
+      }
+
+      const data = await res.json();
+
+      console.log("=== ScrapingDog Response ===");
+      console.log(JSON.stringify(data, null, 2));
+
+      // Extract from post_results
+      const pr = data?.post_results || data;
+
+      const content = pr?.text || null;
+      const authorName = pr?.author?.name || null;
+      const authorTitle = pr?.author?.headline || null;
+      const authorImage = pr?.author?.image || null;
+      const authorUrl = pr?.author?.url || null;
+      const authorFollowers = pr?.author?.follower_count || 0;
+      const commentCount = pr?.comment_count || 0;
+      const comments = (pr?.comments || []).map(
+        (c: {
+          text: string;
+          name: string;
+          date: string;
+          headline: string;
+          profile_link: string;
+          total_interactions: number;
+        }) => ({
+          text: c.text,
+          name: c.name,
+          date: c.date,
+          headline: c.headline,
+          profileLink: c.profile_link,
+          interactions: c.total_interactions,
+        }),
+      );
+      const activityDate = pr?.activity_date || null;
+      const shareUrl = pr?.share_url || null;
+
+      // Update DB
+      if (content) {
+        await ctx.prisma.savedPost.update({
+          where: { id: post.id },
+          data: {
+            description: content.slice(0, 2000),
+            ...(authorName ? { authorName } : {}),
+            ...(authorImage ? { thumbnail: authorImage } : {}),
+            metadata: {
+              ...((post.metadata as Record<string, unknown>) || {}),
+              authorJobTitle:
+                authorTitle ||
+                (post.metadata as Record<string, string>)?.authorJobTitle,
+              authorUrl,
+              authorFollowers,
+              fetchedAt: new Date().toISOString(),
+              commentCount,
+              activityDate,
+              shareUrl,
+            },
+          },
+        });
+      }
+
+      return {
+        content,
+        authorName,
+        authorTitle,
+        authorImage,
+        authorUrl,
+        authorFollowers,
+        commentCount,
+        comments,
+        activityDate,
+        shareUrl,
+      };
+    }),
+
+  // ── addNote ──────────────────────────────────────────────────────────────
+  addNote: protectedProcedure
+    .input(
+      z.object({
+        postId: z.string().cuid(),
+        content: z.string().min(1).max(5000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify post belongs to user
+      const post = await ctx.prisma.savedPost.findFirst({
+        where: { id: input.postId, userId: ctx.user.id },
+      });
+      if (!post) throw new Error("Post not found");
+
+      return ctx.prisma.postNote.create({
+        data: {
+          postId: input.postId,
+          userId: ctx.user.id,
+          content: input.content,
+        },
+      });
+    }),
+
+  // ── deleteNote ─────────────────────────────────────────────────────────────
+  deleteNote: protectedProcedure
+    .input(z.object({ noteId: z.string().cuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const deleted = await ctx.prisma.postNote.deleteMany({
+        where: { id: input.noteId, userId: ctx.user.id },
+      });
+      if (deleted.count === 0) throw new Error("Note not found");
+      return { success: true };
+    }),
+
+  // ── getNotes ───────────────────────────────────────────────────────────────
+  getNotes: protectedProcedure
+    .input(z.object({ postId: z.string().cuid() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.prisma.postNote.findMany({
+        where: { postId: input.postId, userId: ctx.user.id },
+        orderBy: { createdAt: "desc" },
+      });
+    }),
+
   // ── counts ─────────────────────────────────────────────────────────────────
   // Summary count per platform — used by the sidebar / stats panel.
   counts: protectedProcedure.query(async ({ ctx }) => {

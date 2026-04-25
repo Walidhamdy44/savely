@@ -53,6 +53,7 @@ model SavedPost {
   sourceType  SourceType @default(manual)
   note        String?
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes       PostNote[]
 
   @@unique([userId, platform, externalId])
   @@unique([userId, url])
@@ -71,6 +72,19 @@ model ApiToken {
   User      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
+  @@index([userId])
+}
+
+model PostNote {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  post      SavedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
   @@index([userId])
 }
 

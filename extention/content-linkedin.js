@@ -77,23 +77,44 @@
       }
 
       // ── Author job title ─────────────────────────────────────
-      // Job title is in a linked-area div, first div child
-      const linkedAreas = postElement.querySelectorAll(
-        "[class*='linked-area']",
-      );
-      if (linkedAreas.length > 0) {
-        const firstLinked = linkedAreas[0];
-        const divs = firstLinked.querySelectorAll("div");
-        for (const div of divs) {
-          const text = div.innerText?.trim();
-          if (
-            text &&
-            !text.includes("•") &&
-            !text.match(/^\d+[hdwmy]/) &&
-            text.length > 3
-          ) {
-            data.authorJobTitle = cleanText(text);
-            break;
+      // ── Author job title ─────────────────────────────────────
+      // The job title div has classes like "t-14 t-black t-normal" inside linked-area
+      // Try the specific class pattern first, then fall back to linked-area search
+      const jobEl =
+        postElement.querySelector(
+          "[class*='linked-area'] [class*='t-black'][class*='t-normal']:not([class*='t-black--light'])",
+        ) ||
+        postElement.querySelector(
+          "[class*='linked-area'] [class*='t-14'][class*='t-black']",
+        ) ||
+        postElement.querySelector("[class*='entity-result__primary-subtitle']");
+      if (jobEl) {
+        const text = jobEl.innerText?.trim();
+        if (text && text.length > 2) {
+          // Clean out any time indicators that might be in the text
+          data.authorJobTitle = cleanText(text.split("•")[0].trim());
+        }
+      }
+      // Fallback: search linked-area divs
+      if (!data.authorJobTitle) {
+        const linkedAreas = postElement.querySelectorAll(
+          "[class*='linked-area']",
+        );
+        if (linkedAreas.length > 0) {
+          const firstLinked = linkedAreas[0];
+          const divs = firstLinked.querySelectorAll("div");
+          for (const div of divs) {
+            const text = div.textContent?.trim();
+            if (
+              text &&
+              text.length > 3 &&
+              text.length < 200 &&
+              !text.match(/^\d+[hdwmy]/) &&
+              div.children.length === 0 // leaf node only
+            ) {
+              data.authorJobTitle = cleanText(text.split("•")[0].trim());
+              break;
+            }
           }
         }
       }
@@ -140,12 +161,26 @@
       }
 
       // ── Post image ───────────────────────────────────────────
-      const imgs = postElement.querySelectorAll("img");
-      for (const img of imgs) {
-        const src = img.src || "";
+      // First try to get the post's content image (inside mh4/embedded-object)
+      const contentImg =
+        postElement.querySelector("div.mh4 img") ||
+        postElement.querySelector("[class*='content-inner-container'] img") ||
+        postElement.querySelector("[class*='embedded-object'] img");
+      if (contentImg) {
+        const src = contentImg.src || "";
         if (src && !src.includes("data:image") && src.startsWith("http")) {
           data.postImage = src;
-          break;
+        }
+      }
+      // Fallback: get the profile photo
+      if (!data.postImage) {
+        const imgs = postElement.querySelectorAll("img");
+        for (const img of imgs) {
+          const src = img.src || "";
+          if (src && !src.includes("data:image") && src.startsWith("http")) {
+            data.postImage = src;
+            break;
+          }
         }
       }
 

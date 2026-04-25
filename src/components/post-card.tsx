@@ -2,6 +2,7 @@
 
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -27,6 +28,7 @@ type Props = {
 export function PostCard({ post }: Props) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const meta = PLATFORM_META[post.platform];
 
   const deleteMutation = useMutation(
@@ -41,8 +43,15 @@ export function PostCard({ post }: Props) {
     }),
   );
 
+  const handleCardClick = () => {
+    router.push(`/post/${post.id}`);
+  };
+
   return (
-    <div className="group flex flex-col overflow-hidden rounded-3xl bg-[#281d18] border border-[rgba(255,255,255,0.04)] transition-all duration-200 hover:bg-[#332822] hover:shadow-xl hover:shadow-black/20">
+    <div
+      onClick={handleCardClick}
+      className="group flex cursor-pointer flex-col overflow-hidden rounded-3xl bg-[#281d18] border border-[rgba(255,255,255,0.04)] transition-all duration-200 hover:bg-[#332822] hover:shadow-xl hover:shadow-black/20"
+    >
       {/* Thumbnail */}
       {post.thumbnail ? (
         <div className="relative m-4 mb-0 overflow-hidden rounded-2xl bg-[#1b110c]">
@@ -132,6 +141,7 @@ export function PostCard({ post }: Props) {
               href={post.url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#a48c7f] transition-colors hover:bg-white/5 hover:text-[#f2dfd5]"
               aria-label="Open link"
             >
@@ -146,6 +156,7 @@ export function PostCard({ post }: Props) {
                     size="icon"
                     className="h-8 w-8 text-[#a48c7f] hover:bg-red-500/10 hover:text-red-400"
                     aria-label="Remove post"
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

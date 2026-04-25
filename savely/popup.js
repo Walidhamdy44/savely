@@ -317,23 +317,39 @@ function scrapeLinkedIn() {
         const profileEl = item.querySelector('a[href*="/in/"]');
         const authorProfileURL = profileEl?.href?.split("?")[0] || "";
 
-        // Job title — in the linked-area div after the name
+        // Job title — target t-black t-normal div inside linked-area
         let authorJobTitle = "";
-        const linkedAreas = item.querySelectorAll("[class*='linked-area']");
-        if (linkedAreas.length > 0) {
-          // First linked-area usually has the job title
-          const firstLinked = linkedAreas[0];
-          const divs = firstLinked.querySelectorAll("div");
-          for (const div of divs) {
-            const text = div.innerText.trim();
-            if (
-              text &&
-              !text.includes("•") &&
-              !text.match(/^\d+[hdwmy]/) &&
-              text.length > 3
-            ) {
-              authorJobTitle = text;
-              break;
+        const jobEl =
+          item.querySelector(
+            "[class*='linked-area'] [class*='t-black'][class*='t-normal']:not([class*='t-black--light'])",
+          ) ||
+          item.querySelector(
+            "[class*='linked-area'] [class*='t-14'][class*='t-black']",
+          ) ||
+          item.querySelector("[class*='entity-result__primary-subtitle']");
+        if (jobEl) {
+          const text = jobEl.innerText?.trim();
+          if (text && text.length > 2) {
+            authorJobTitle = text.split("•")[0].trim();
+          }
+        }
+        // Fallback: leaf divs in linked-area
+        if (!authorJobTitle) {
+          const linkedAreas = item.querySelectorAll("[class*='linked-area']");
+          if (linkedAreas.length > 0) {
+            const divs = linkedAreas[0].querySelectorAll("div");
+            for (const div of divs) {
+              const text = div.textContent?.trim();
+              if (
+                text &&
+                text.length > 3 &&
+                text.length < 200 &&
+                !text.match(/^\d+[hdwmy]/) &&
+                div.children.length === 0
+              ) {
+                authorJobTitle = text.split("•")[0].trim();
+                break;
+              }
             }
           }
         }
