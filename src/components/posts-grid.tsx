@@ -6,23 +6,36 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Platform } from "@prisma/client";
 import { PostCard } from "@/components/post-card";
 import { PlatformFilter } from "@/components/platform-filter";
-import { BookmarkX, Loader2 } from "lucide-react";
+import { BookmarkX, Loader2, Search, X } from "lucide-react";
 import type { SavedPost } from "@prisma/client";
+
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
 
 export function PostsGrid() {
   const trpc = useTRPC();
-  const queryClient = useQueryClient();
   const [platform, setPlatform] = useState<Platform | undefined>(undefined);
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput, 700);
+  const search = debouncedSearch.trim() || undefined;
+
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [allPosts, setAllPosts] = useState<SavedPost[]>([]);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
 
-  // Current cursor is the last one in the array
   const currentCursor = cursors[cursors.length - 1];
 
   const { data, isLoading } = useQuery(
     trpc.posts.getAll.queryOptions({
       platform,
+      search,
       limit: 20,
       cursor: currentCursor,
     }),
@@ -30,21 +43,19 @@ export function PostsGrid() {
 
   const { data: countsData } = useQuery(trpc.posts.counts.queryOptions());
 
-  // When platform changes, reset everything
+  // Reset when platform or search changes
   useEffect(() => {
     setCursors([undefined]);
     setAllPosts([]);
-  }, [platform]);
+  }, [platform, search]);
 
-  // When data arrives, accumulate posts
+  // Accumulate posts
   useEffect(() => {
     if (!data) return;
 
     if (currentCursor === undefined) {
-      // First page
       setAllPosts(data.posts);
     } else {
-      // Append new page (avoid duplicates)
       setAllPosts((prev) => {
         const existingIds = new Set(prev.map((p) => p.id));
         const newPosts = data.posts.filter((p) => !existingIds.has(p.id));
@@ -89,13 +100,55 @@ export function PostsGrid() {
   }, [hasNextPage, isFetchingMore, isLoading, fetchNextPage]);
 
   return (
-    <div className="space-y-8">
-      {/* Platform filter bar */}
+    <div className="space-y-6">
+      {/* Search + Filter bar */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+        {/* Search input */}
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#564338]" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by title, author, content…"
+            className="h-10 w-full rounded-xl bg-[#281d18] pl-10 pr-9 text-sm text-[#f2dfd5] placeholder:text-[#564338] border border-[rgba(255,255,255,0.04)] outline-none transition-all focus:border-[#FF8C42]/40 focus:ring-1 focus:ring-[#FF8C42]/20"
+          />
+          {searchInput && (
+            <button
+              onClick={() => setSearchInput("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#564338] hover:text-[#a48c7f] transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Platform filter chips */}
       <PlatformFilter
         selected={platform}
         onSelect={setPlatform}
         counts={countsData}
       />
+
+      {/* Active search indicator */}
+      {search && (
+        <div className="flex items-center gap-2 text-sm text-[#a48c7f]">
+          <Search className="h-3.5 w-3.5" />
+          <span>
+            Showing results for{" "}
+            <span className="font-medium text-[#FFB68D]">
+              &quot;{search}&quot;
+            </span>
+          </span>
+          {!isLoading && (
+            <span className="text-[#564338]">
+              · {allPosts.length} {allPosts.length === 1 ? "result" : "results"}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Loading skeletons — first page only */}
       {isLoading && allPosts.length === 0 && (
@@ -121,18 +174,32 @@ export function PostsGrid() {
       {!isLoading && allPosts.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-[#564338] bg-[#281d18]/50 py-24 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#332822]">
-            <BookmarkX className="h-7 w-7 text-[#564338]" />
+            {search ? (
+              <Search className="h-7 w-7 text-[#564338]" />
+            ) : (
+              <BookmarkX className="h-7 w-7 text-[#564338]" />
+            )}
           </div>
           <div className="space-y-1.5">
             <p className="text-lg font-semibold text-[#a48c7f]">
-              No saved posts yet
+              {search ? "No results found" : "No saved posts yet"}
             </p>
             <p className="max-w-xs text-sm text-[#564338]">
-              {platform
-                ? `You have no saved posts from ${platform}.`
-                : "Start saving content from YouTube, LinkedIn, or GitHub to see it here."}
+              {search
+                ? `No posts matching "${search}"${platform ? ` in ${platform}` : ""}.`
+                : platform
+                  ? `You have no saved posts from ${platform}.`
+                  : "Start saving content from YouTube, LinkedIn, or GitHub to see it here."}
             </p>
           </div>
+          {search && (
+            <button
+              onClick={() => setSearchInput("")}
+              className="mt-2 rounded-xl bg-[#332822] px-4 py-2 text-sm font-medium text-[#a48c7f] transition-colors hover:bg-[#3e322c] hover:text-[#f2dfd5]"
+            >
+              Clear search
+            </button>
+          )}
         </div>
       )}
 

@@ -24,17 +24,47 @@ export const postsRouter = createTRPCRouter({
     .input(
       z.object({
         platform: platformSchema.optional(),
+        search: z.string().max(200).optional(),
         limit: z.number().int().min(1).max(100).default(20),
         cursor: z.string().cuid().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { platform, limit, cursor } = input;
+      const { platform, search, limit, cursor } = input;
+
+      const searchFilter = search?.trim()
+        ? {
+            OR: [
+              {
+                title: {
+                  contains: search.trim(),
+                  mode: "insensitive" as const,
+                },
+              },
+              {
+                description: {
+                  contains: search.trim(),
+                  mode: "insensitive" as const,
+                },
+              },
+              {
+                authorName: {
+                  contains: search.trim(),
+                  mode: "insensitive" as const,
+                },
+              },
+              {
+                url: { contains: search.trim(), mode: "insensitive" as const },
+              },
+            ],
+          }
+        : {};
 
       const posts = await ctx.prisma.savedPost.findMany({
         where: {
           userId: ctx.user.id,
           ...(platform !== undefined ? { platform } : {}),
+          ...searchFilter,
         },
         take: limit + 1,
         cursor: cursor ? { id: cursor } : undefined,

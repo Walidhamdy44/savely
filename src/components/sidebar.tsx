@@ -10,6 +10,7 @@ import {
   Search,
   PanelLeftClose,
   PanelLeftOpen,
+  GitFork,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,11 @@ const NAV_ITEMS = [
     href: "/dashboard",
     label: "All Posts",
     icon: LayoutDashboard,
+  },
+  {
+    href: "/github",
+    label: "GitHub",
+    icon: GitFork,
   },
   {
     href: "/settings",
