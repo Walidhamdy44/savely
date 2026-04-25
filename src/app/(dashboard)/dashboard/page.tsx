@@ -3,8 +3,13 @@ import { PostsGrid } from "@/components/posts-grid";
 import { AddPostDialog } from "@/components/add-post-dialog";
 
 export default async function DashboardPage() {
-  prefetch(trpc.posts.getAll.queryOptions({ limit: 20 }));
-  prefetch(trpc.posts.counts.queryOptions());
+  // Prefetch may fail if user record hasn't been created by webhook yet
+  try {
+    prefetch(trpc.posts.getAll.queryOptions({ limit: 20 }));
+    prefetch(trpc.posts.counts.queryOptions());
+  } catch {
+    // Client will retry — this is fine
+  }
 
   return (
     <HydrateClient>

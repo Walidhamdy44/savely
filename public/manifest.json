@@ -1,0 +1,21 @@
+{
+  "name": "Savely",
+  "short_name": "Savely",
+  "description": "Save and organize content from YouTube, LinkedIn, GitHub, and more.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#1b110c",
+  "theme_color": "#FF8C42",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

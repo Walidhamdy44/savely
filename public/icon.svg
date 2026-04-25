@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#1a1028"/>
+  <!-- Book shape -->
+  <rect x="8" y="5" width="18" height="22" rx="2" fill="#d4d0d8"/>
+  <!-- Yellow stripes -->
+  <rect x="23" y="5" width="1" height="22" fill="#f5c518"/>
+  <rect x="25" y="5" width="1" height="22" fill="#f5c518"/>
+  <!-- Bookmark -->
+  <path d="M10 3 L10 20 L13.5 17 L17 20 L17 3 Z" fill="#2d2040"/>
+  <!-- Film frames -->
+  <rect x="11" y="5" width="4" height="3" rx="0.5" fill="#f5c518"/>
+  <rect x="11" y="10" width="4" height="3" rx="0.5" fill="#f5c518"/>
+  <rect x="11" y="15" width="4" height="3" rx="0.5" fill="#f5c518"/>
+</svg>

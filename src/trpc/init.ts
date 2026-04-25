@@ -50,14 +50,39 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
     });
   }
 
-  const user = await ctx.prisma.user.findUnique({
+  let user = await ctx.prisma.user.findUnique({
     where: { clerkId: ctx.clerkUserId },
   });
+
+  // Auto-create user if webhook hasn't fired yet (common in local dev)
+  if (!user) {
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const clerkUser = await client.users.getUser(ctx.clerkUserId);
+      const email = clerkUser.emailAddresses[0]?.emailAddress;
+
+      if (email) {
+        user = await ctx.prisma.user.upsert({
+          where: { clerkId: ctx.clerkUserId },
+          create: {
+            clerkId: ctx.clerkUserId,
+            email,
+            username: clerkUser.username ?? null,
+            imageUrl: clerkUser.imageUrl,
+          },
+          update: {},
+        });
+      }
+    } catch {
+      // If Clerk API fails, fall through to the error below
+    }
+  }
 
   if (!user) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "User record not found. The webhook may not have fired yet.",
+      message: "User record not found. Please try again in a moment.",
     });
   }
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { Bookmark, Play, GitBranch, Link2 } from "lucide-react";
+import { Play, GitBranch, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -12,14 +12,14 @@ export default async function HomePage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-12 px-6 py-16 text-center">
       {/* Logo */}
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FF8C42] shadow-lg shadow-[#FF8C42]/20">
-        <Bookmark className="h-7 w-7 text-[#532200]" />
+      <div className="flex h-20 w-20 items-center justify-center rounded-2xl overflow-hidden shadow-lg shadow-[#1a1028]/40">
+        <img src="/icon.svg" alt="Savely" className="h-20 w-20" />
       </div>
 
       {/* Headline */}
       <div className="space-y-4">
         <h1 className="text-5xl font-bold tracking-tight text-[#f2dfd5] sm:text-6xl">
-          Unified Content Hub
+          Savely
         </h1>
         <p className="mx-auto max-w-lg text-lg leading-relaxed text-[#a48c7f]">
           One place for everything you want to revisit — YouTube videos,

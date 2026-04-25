@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Settings,
-  Bookmark,
   Search,
   PanelLeftClose,
   PanelLeftOpen,
@@ -46,8 +45,8 @@ export function Sidebar() {
             collapsed ? "w-9" : "w-full",
           )}
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FF8C42]">
-            <Bookmark className="h-[18px] w-[18px] text-[#532200]" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden">
+            <img src="/icon.svg" alt="Savely" className="h-9 w-9" />
           </div>
           <span
             className={cn(
@@ -55,7 +54,7 @@ export function Sidebar() {
               collapsed ? "w-0 opacity-0" : "w-auto opacity-100",
             )}
           >
-            Content Hub
+            Savely
           </span>
         </div>
 

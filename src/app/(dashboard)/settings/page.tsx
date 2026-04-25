@@ -3,7 +3,11 @@ import { ApiTokens } from "@/components/api-tokens";
 import { ImportJson } from "@/components/import-json";
 
 export default async function SettingsPage() {
-  prefetch(trpc.tokens.list.queryOptions());
+  try {
+    prefetch(trpc.tokens.list.queryOptions());
+  } catch {
+    // Client will retry
+  }
 
   return (
     <HydrateClient>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="64" fill="#1a1028"/>
+  <!-- Book/page shape -->
+  <rect x="140" y="80" width="260" height="340" rx="8" fill="#d4d0d8"/>
+  <!-- Yellow stripes on right -->
+  <rect x="360" y="80" width="8" height="340" fill="#f5c518"/>
+  <rect x="375" y="80" width="6" height="340" fill="#f5c518"/>
+  <rect x="387" y="80" width="4" height="340" fill="#f5c518"/>
+  <!-- Bookmark ribbon -->
+  <path d="M160 60 L160 320 L195 285 L230 320 L230 60 Z" fill="#2d2040"/>
+  <!-- Film strip holes left -->
+  <rect x="155" y="90" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="155" y="115" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="155" y="140" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="155" y="165" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="155" y="190" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="155" y="215" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="155" y="240" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="155" y="265" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <!-- Film strip holes right -->
+  <rect x="227" y="90" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="227" y="115" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="227" y="140" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="227" y="165" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="227" y="190" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="227" y="215" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="227" y="240" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <rect x="227" y="265" width="8" height="12" rx="1" fill="#d4d0d8"/>
+  <!-- Film frames (yellow) -->
+  <rect x="170" y="90" width="50" height="30" rx="2" fill="#f5c518"/>
+  <rect x="170" y="130" width="50" height="30" rx="2" fill="#f5c518"/>
+  <rect x="170" y="170" width="50" height="30" rx="2" fill="#f5c518"/>
+  <rect x="170" y="210" width="50" height="30" rx="2" fill="#f5c518"/>
+  <!-- W.H text -->
+  <text x="178" y="300" font-family="Arial,sans-serif" font-weight="bold" font-size="28" fill="#1a1028" font-style="italic">W.H</text>
+  <!-- SAVELY text -->
+  <text x="256" y="470" font-family="Arial,sans-serif" font-weight="900" font-size="72" fill="#f5c518" text-anchor="middle" letter-spacing="8">SAVELY</text>
+</svg>
