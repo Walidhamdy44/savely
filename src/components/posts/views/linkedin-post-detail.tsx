@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -15,6 +15,9 @@ import { PLATFORM_META } from "@/lib/constants/platforms";
 import { SharedDetailShell } from "../shared-detail-shell";
 import { PostDetailComments } from "../post-detail-comments";
 import type { PlatformViewProps } from "../types";
+
+/** How long to wait before giving up on the LinkedIn API fetch (ms). */
+const FETCH_TIMEOUT_MS = 10_000;
 
 /**
  * LinkedIn-specific post detail view.
@@ -44,12 +47,23 @@ export function LinkedInPostDetail({
   );
 
   const hasFetchedRef = useRef(false);
+  const [timedOut, setTimedOut] = useState(false);
+
   useEffect(() => {
     if (hasFetchedRef.current || fetchContentMutation.isPending) return;
     hasFetchedRef.current = true;
     fetchContentMutation.mutate({ postId: post.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
+
+  // Timeout: stop showing the loading state after FETCH_TIMEOUT_MS
+  useEffect(() => {
+    if (!fetchContentMutation.isPending) return;
+    const timer = setTimeout(() => setTimedOut(true), FETCH_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [fetchContentMutation.isPending]);
+
+  const isFetching = fetchContentMutation.isPending && !timedOut;
 
   const apiData = fetchContentMutation.data;
   const metadata = post.metadata as Record<string, string> | null;
@@ -145,8 +159,8 @@ export function LinkedInPostDetail({
           <LinkedInContent
             post={post}
             apiData={apiData}
-            isFetching={fetchContentMutation.isPending}
-            fetchError={fetchContentMutation.isError}
+            isFetching={isFetching}
+            fetchError={fetchContentMutation.isError || timedOut}
           />
         </div>
 
@@ -213,17 +227,7 @@ function LinkedInContent({
   isFetching,
   fetchError,
 }: LinkedInContentProps) {
-  if (isFetching) {
-    return (
-      <div className="flex items-center gap-3 py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-[#FF8C42]" />
-        <span className="text-sm text-[#a48c7f]">
-          Fetching post content from LinkedIn…
-        </span>
-      </div>
-    );
-  }
-
+  // If we have API content, show it
   if (apiData?.content) {
     return (
       <p className="text-base leading-[1.8] text-[#f2dfd5] whitespace-pre-wrap">
@@ -232,22 +236,25 @@ function LinkedInContent({
     );
   }
 
-  if (fetchError) {
-    return (
-      <div className="space-y-2">
-        <p className="text-base leading-[1.7] text-[#f2dfd5] whitespace-pre-wrap">
-          {post.description || post.title}
-        </p>
-        <p className="text-xs text-[#564338] mt-2">
-          ⚠ Could not fetch full content from LinkedIn API.
-        </p>
-      </div>
-    );
-  }
+  // Show stored content immediately, with a subtle loading indicator if still fetching
+  const storedContent = post.description || post.title;
 
   return (
-    <p className="text-base leading-[1.7] text-[#f2dfd5] whitespace-pre-wrap">
-      {post.description || post.title}
-    </p>
+    <div className="space-y-2">
+      <p className="text-base leading-[1.7] text-[#f2dfd5] whitespace-pre-wrap">
+        {storedContent}
+      </p>
+      {isFetching && (
+        <div className="flex items-center gap-2 pt-1">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-[#FF8C42]" />
+          <span className="text-xs text-[#564338]">Fetching full content…</span>
+        </div>
+      )}
+      {fetchError && !isFetching && (
+        <p className="text-xs text-[#564338]">
+          ⚠ Could not fetch full content from LinkedIn API.
+        </p>
+      )}
+    </div>
   );
 }

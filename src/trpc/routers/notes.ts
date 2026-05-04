@@ -62,12 +62,15 @@ export const notesRouter = createTRPCRouter({
         });
       }
 
+      const now = new Date();
       const inserted = await ctx.db
         .insert(postNotes)
         .values({
           postId: input.postId,
           userId: ctx.user.id,
           content: input.content,
+          createdAt: now,
+          updatedAt: now,
         })
         .returning();
 
