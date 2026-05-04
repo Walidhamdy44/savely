@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
 import { Webhook } from "svix";
-import { prisma } from "@/lib/prisma";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { users } from "@/db/schema/users";
 
 type ClerkUserEventData = {
   id: string;
@@ -14,6 +16,7 @@ type ClerkWebhookEvent = {
   data: ClerkUserEventData;
 };
 
+/** Handles Clerk webhook events for user lifecycle management. */
 export async function POST(req: Request) {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
 
@@ -54,24 +57,26 @@ export async function POST(req: Request) {
   }
 
   if (evt.type === "user.created" || evt.type === "user.updated") {
-    await prisma.user.upsert({
-      where: { clerkId: id },
-      create: {
+    await db
+      .insert(users)
+      .values({
         clerkId: id,
         email,
         username: username ?? null,
         imageUrl: image_url,
-      },
-      update: {
-        email,
-        username: username ?? null,
-        imageUrl: image_url,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: users.clerkId,
+        set: {
+          email,
+          username: username ?? null,
+          imageUrl: image_url,
+        },
+      });
   }
 
   if (evt.type === "user.deleted") {
-    await prisma.user.deleteMany({ where: { clerkId: id } });
+    await db.delete(users).where(eq(users.clerkId, id));
   }
 
   return new Response("OK", { status: 200 });

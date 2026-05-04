@@ -1,4 +1,5 @@
 import { SignUp } from "@clerk/nextjs";
+import Link from "next/link";
 import { AuthDecorativePanel } from "@/components/auth-decorative-panel";
 
 export default function SignUpPage() {
@@ -75,12 +76,12 @@ export default function SignUpPage() {
           {/* Footer link */}
           <p className="text-center text-sm text-[#564338]">
             Already have an account?{" "}
-            <a
+            <Link
               href="/sign-in"
               className="font-medium text-[#FF8C42] hover:text-[#FFB68D] transition-colors"
             >
               Sign in
-            </a>
+            </Link>
           </p>
 
           {/* Free tier notice */}

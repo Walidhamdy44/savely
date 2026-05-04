@@ -1,6 +1,7 @@
 import { HydrateClient, prefetch, trpc } from "@/trpc/server";
-import { ApiTokens } from "@/components/api-tokens";
-import { ImportJson } from "@/components/import-json";
+import { ApiTokens } from "@/components/settings/api-tokens";
+import { ImportJson } from "@/components/settings/import-json";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default async function SettingsPage() {
   try {
@@ -22,10 +23,14 @@ export default async function SettingsPage() {
         </div>
 
         {/* Import JSON */}
-        <ImportJson />
+        <ErrorBoundary>
+          <ImportJson />
+        </ErrorBoundary>
 
         {/* API Tokens */}
-        <ApiTokens />
+        <ErrorBoundary>
+          <ApiTokens />
+        </ErrorBoundary>
       </div>
     </HydrateClient>
   );

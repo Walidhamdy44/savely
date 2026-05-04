@@ -1,5 +1,6 @@
 import { HydrateClient, prefetch, trpc } from "@/trpc/server";
-import { PostDetail } from "@/components/post-detail";
+import { PostDetail } from "@/components/posts/post-detail";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default async function PostDetailPage({
   params,
@@ -10,13 +11,16 @@ export default async function PostDetailPage({
 
   try {
     prefetch(trpc.posts.getById.queryOptions({ id }));
+    prefetch(trpc.notes.list.queryOptions({ postId: id }));
   } catch {
     // Client will retry
   }
 
   return (
     <HydrateClient>
-      <PostDetail postId={id} />
+      <ErrorBoundary>
+        <PostDetail postId={id} />
+      </ErrorBoundary>
     </HydrateClient>
   );
 }

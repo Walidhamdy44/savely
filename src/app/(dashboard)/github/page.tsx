@@ -1,5 +1,6 @@
 import { HydrateClient, prefetch, trpc } from "@/trpc/server";
-import { GitHubPage } from "@/components/github-page";
+import { GitHubPage } from "@/components/github/github-page";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default async function GitHubDashboardPage() {
   try {
@@ -11,7 +12,9 @@ export default async function GitHubDashboardPage() {
 
   return (
     <HydrateClient>
-      <GitHubPage />
+      <ErrorBoundary>
+        <GitHubPage />
+      </ErrorBoundary>
     </HydrateClient>
   );
 }

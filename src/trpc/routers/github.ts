@@ -1,7 +1,10 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
-import { Platform, SourceType } from "@prisma/client";
+import { eq, and } from "drizzle-orm";
+import { createTRPCRouter, protectedProcedure } from "../init";
+import { githubConnections } from "@/db/schema/github-connections";
+import { savedPosts } from "@/db/schema/saved-posts";
+import { GITHUB_API_BASE } from "@/lib/constants/api";
 
 // GitHub API types
 interface GitHubUser {
@@ -40,8 +43,12 @@ interface GitHubRepo {
   license: { name: string } | null;
 }
 
+/**
+ * Fetch a single resource from the GitHub REST API.
+ * Throws TRPCError for 404 and 403 (rate-limit) responses.
+ */
 async function fetchGitHub<T>(path: string): Promise<T> {
-  const res = await fetch(`https://api.github.com${path}`, {
+  const res = await fetch(`${GITHUB_API_BASE}${path}`, {
     headers: {
       Accept: "application/vnd.github.v3+json",
       "User-Agent": "Savely-App",
@@ -71,6 +78,10 @@ async function fetchGitHub<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/**
+ * Paginate through a GitHub list endpoint, collecting up to `maxPages` pages
+ * of 100 items each.
+ */
 async function fetchAllPages<T>(path: string, maxPages = 10): Promise<T[]> {
   const all: T[] = [];
   for (let page = 1; page <= maxPages; page++) {
@@ -85,23 +96,24 @@ async function fetchAllPages<T>(path: string, maxPages = 10): Promise<T[]> {
 }
 
 export const githubRouter = createTRPCRouter({
-  // Get connection status
+  /** Get the current user's GitHub connection status. */
   getConnection: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.gitHubConnection.findUnique({
-      where: { userId: ctx.user.id },
+    const connection = await ctx.db.query.githubConnections.findFirst({
+      where: eq(githubConnections.userId, ctx.user.id),
     });
+    return connection ?? null;
   }),
 
-  // Connect by username
+  /** Connect a GitHub account by username. Upserts the connection record. */
   connect: protectedProcedure
     .input(z.object({ username: z.string().min(1).max(100) }))
     .mutation(async ({ ctx, input }) => {
       // Verify user exists on GitHub
       const ghUser = await fetchGitHub<GitHubUser>(`/users/${input.username}`);
 
-      const connection = await ctx.prisma.gitHubConnection.upsert({
-        where: { userId: ctx.user.id },
-        create: {
+      const connection = await ctx.db
+        .insert(githubConnections)
+        .values({
           userId: ctx.user.id,
           username: ghUser.login,
           avatarUrl: ghUser.avatar_url,
@@ -110,30 +122,33 @@ export const githubRouter = createTRPCRouter({
           publicRepos: ghUser.public_repos,
           followers: ghUser.followers,
           following: ghUser.following,
-        },
-        update: {
-          username: ghUser.login,
-          avatarUrl: ghUser.avatar_url,
-          bio: ghUser.bio,
-          location: ghUser.location,
-          publicRepos: ghUser.public_repos,
-          followers: ghUser.followers,
-          following: ghUser.following,
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: githubConnections.userId,
+          set: {
+            username: ghUser.login,
+            avatarUrl: ghUser.avatar_url,
+            bio: ghUser.bio,
+            location: ghUser.location,
+            publicRepos: ghUser.public_repos,
+            followers: ghUser.followers,
+            following: ghUser.following,
+          },
+        })
+        .returning();
 
-      return connection;
+      return connection[0];
     }),
 
-  // Disconnect
+  /** Disconnect the current user's GitHub account. */
   disconnect: protectedProcedure.mutation(async ({ ctx }) => {
-    await ctx.prisma.gitHubConnection.deleteMany({
-      where: { userId: ctx.user.id },
-    });
+    await ctx.db
+      .delete(githubConnections)
+      .where(eq(githubConnections.userId, ctx.user.id));
     return { success: true };
   }),
 
-  // Fetch starred repos from GitHub
+  /** Fetch starred repos from GitHub for the connected user. */
   getStarredRepos: protectedProcedure
     .input(
       z.object({
@@ -141,8 +156,8 @@ export const githubRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const connection = await ctx.prisma.gitHubConnection.findUnique({
-        where: { userId: ctx.user.id },
+      const connection = await ctx.db.query.githubConnections.findFirst({
+        where: eq(githubConnections.userId, ctx.user.id),
       });
       if (!connection) {
         throw new TRPCError({
@@ -188,7 +203,7 @@ export const githubRouter = createTRPCRouter({
       }));
     }),
 
-  // Fetch user's own repos
+  /** Fetch the connected user's own repos from GitHub. */
   getUserRepos: protectedProcedure
     .input(
       z.object({
@@ -196,8 +211,8 @@ export const githubRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const connection = await ctx.prisma.gitHubConnection.findUnique({
-        where: { userId: ctx.user.id },
+      const connection = await ctx.db.query.githubConnections.findFirst({
+        where: eq(githubConnections.userId, ctx.user.id),
       });
       if (!connection) {
         throw new TRPCError({
@@ -242,7 +257,7 @@ export const githubRouter = createTRPCRouter({
       }));
     }),
 
-  // Save a repo to Savely
+  /** Save a GitHub repo as a SavedPost in Savely. */
   saveRepo: protectedProcedure
     .input(
       z.object({
@@ -260,65 +275,75 @@ export const githubRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.savedPost.upsert({
-        where: {
-          userId_platform_externalId: {
-            userId: ctx.user.id,
-            platform: Platform.github,
-            externalId: `gh_${input.repoId}`,
-          },
-        },
-        create: {
+      const result = await ctx.db
+        .insert(savedPosts)
+        .values({
           userId: ctx.user.id,
-          platform: Platform.github,
+          platform: "github",
           externalId: `gh_${input.repoId}`,
           title: input.fullName,
           description: input.description,
           url: input.url,
           thumbnail: input.ownerAvatar,
           authorName: input.ownerLogin,
-          sourceType: SourceType.github_starred,
+          sourceType: "github_starred",
           metadata: {
             language: input.language,
             stars: input.stars,
             forks: input.forks,
             topics: input.topics,
           },
-        },
-        update: {
-          title: input.fullName,
-          description: input.description,
-          thumbnail: input.ownerAvatar,
-          metadata: {
-            language: input.language,
-            stars: input.stars,
-            forks: input.forks,
-            topics: input.topics,
+        })
+        .onConflictDoUpdate({
+          target: [
+            savedPosts.userId,
+            savedPosts.platform,
+            savedPosts.externalId,
+          ],
+          set: {
+            title: input.fullName,
+            description: input.description,
+            thumbnail: input.ownerAvatar,
+            metadata: {
+              language: input.language,
+              stars: input.stars,
+              forks: input.forks,
+              topics: input.topics,
+            },
           },
-        },
-      });
+        })
+        .returning();
+
+      return result[0];
     }),
 
-  // Unsave a repo
+  /** Remove a saved GitHub repo from Savely. */
   unsaveRepo: protectedProcedure
     .input(z.object({ repoId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.prisma.savedPost.deleteMany({
-        where: {
-          userId: ctx.user.id,
-          platform: Platform.github,
-          externalId: `gh_${input.repoId}`,
-        },
-      });
+      await ctx.db
+        .delete(savedPosts)
+        .where(
+          and(
+            eq(savedPosts.userId, ctx.user.id),
+            eq(savedPosts.platform, "github"),
+            eq(savedPosts.externalId, `gh_${input.repoId}`),
+          ),
+        );
       return { success: true };
     }),
 
-  // Get saved repo IDs for quick lookup
+  /** Get IDs of all saved GitHub repos for quick lookup in the UI. */
   getSavedRepoIds: protectedProcedure.query(async ({ ctx }) => {
-    const saved = await ctx.prisma.savedPost.findMany({
-      where: { userId: ctx.user.id, platform: Platform.github },
-      select: { externalId: true },
-    });
+    const saved = await ctx.db
+      .select({ externalId: savedPosts.externalId })
+      .from(savedPosts)
+      .where(
+        and(
+          eq(savedPosts.userId, ctx.user.id),
+          eq(savedPosts.platform, "github"),
+        ),
+      );
     return saved.map((s) => parseInt(s.externalId.replace("gh_", ""), 10));
   }),
 });

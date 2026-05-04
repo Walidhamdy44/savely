@@ -1,75 +1,92 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { eq, and, desc, lt, like, or, sql, count } from "drizzle-orm";
 import { createTRPCRouter, protectedProcedure } from "../init";
-import { Platform } from "@prisma/client";
+import { savedPosts } from "@/db/schema/saved-posts";
+import { platformEnum } from "@/db/schema/enums";
+import { getPostById, countPostsByPlatform } from "@/db/prepared";
+import {
+  MAX_TITLE_LENGTH,
+  MAX_DESCRIPTION_LENGTH,
+} from "@/lib/constants/validation";
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@/lib/constants/pagination";
+import { SCRAPINGDOG_API_BASE } from "@/lib/constants/api";
 
-// Reusable Zod schema for platform — mirrors the Prisma enum
-const platformSchema = z.nativeEnum(Platform);
+/** Zod schema for the platform enum — mirrors the Drizzle pgEnum values */
+const platformSchema = z.enum(platformEnum.enumValues);
 
-// Input schema for creating/upserting a saved post
+/** Input schema for creating/upserting a saved post */
 const savePostInput = z.object({
   platform: platformSchema,
   externalId: z.string().min(1, "externalId is required"),
-  title: z.string().min(1, "title is required").max(500),
-  description: z.string().max(2000).optional(),
+  title: z.string().min(1, "title is required").max(MAX_TITLE_LENGTH),
+  description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
   url: z.string().url("url must be a valid URL"),
   thumbnail: z.string().url("thumbnail must be a valid URL").optional(),
   metadata: z.any().optional(),
 });
 
 export const postsRouter = createTRPCRouter({
-  // ── getAll ─────────────────────────────────────────────────────────────────
-  // Cursor-based paginated list of saved posts for the current user.
-  // Optionally filtered by platform.
+  /**
+   * Cursor-based paginated list of saved posts for the current user.
+   * Optionally filtered by platform and/or search text.
+   */
   getAll: protectedProcedure
     .input(
       z.object({
         platform: platformSchema.optional(),
         search: z.string().max(200).optional(),
-        limit: z.number().int().min(1).max(100).default(20),
-        cursor: z.string().cuid().optional(),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_PAGE_SIZE)
+          .default(DEFAULT_PAGE_SIZE),
+        cursor: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const { platform, search, limit, cursor } = input;
+      const userId = ctx.user.id;
+      const trimmedSearch = search?.trim();
 
-      const searchFilter = search?.trim()
-        ? {
-            OR: [
-              {
-                title: {
-                  contains: search.trim(),
-                  mode: "insensitive" as const,
-                },
-              },
-              {
-                description: {
-                  contains: search.trim(),
-                  mode: "insensitive" as const,
-                },
-              },
-              {
-                authorName: {
-                  contains: search.trim(),
-                  mode: "insensitive" as const,
-                },
-              },
-              {
-                url: { contains: search.trim(), mode: "insensitive" as const },
-              },
-            ],
-          }
-        : {};
+      const conditions = [eq(savedPosts.userId, userId)];
 
-      const posts = await ctx.prisma.savedPost.findMany({
-        where: {
-          userId: ctx.user.id,
-          ...(platform !== undefined ? { platform } : {}),
-          ...searchFilter,
-        },
-        take: limit + 1,
-        cursor: cursor ? { id: cursor } : undefined,
-        orderBy: { savedAt: "desc" },
-      });
+      if (platform) {
+        conditions.push(eq(savedPosts.platform, platform));
+      }
+
+      if (trimmedSearch) {
+        const pattern = `%${trimmedSearch}%`;
+        conditions.push(
+          or(
+            like(savedPosts.title, pattern),
+            like(savedPosts.description, pattern),
+            like(savedPosts.authorName, pattern),
+            like(savedPosts.url, pattern),
+          )!,
+        );
+      }
+
+      if (cursor) {
+        // For cursor pagination: fetch the cursor post's savedAt, then filter lt
+        const cursorPost = await ctx.db
+          .select({ savedAt: savedPosts.savedAt })
+          .from(savedPosts)
+          .where(and(eq(savedPosts.id, cursor), eq(savedPosts.userId, userId)))
+          .limit(1);
+
+        if (cursorPost.length > 0) {
+          conditions.push(lt(savedPosts.savedAt, cursorPost[0].savedAt));
+        }
+      }
+
+      const posts = await ctx.db
+        .select()
+        .from(savedPosts)
+        .where(and(...conditions))
+        .orderBy(desc(savedPosts.savedAt))
+        .limit(limit + 1);
 
       let nextCursor: string | undefined;
       if (posts.length > limit) {
@@ -80,34 +97,67 @@ export const postsRouter = createTRPCRouter({
       return { posts, nextCursor };
     }),
 
-  // ── getById ────────────────────────────────────────────────────────────────
+  /** Get a single post by ID (uses prepared statement). */
   getById: protectedProcedure
-    .input(z.object({ id: z.string().cuid() }))
+    .input(z.object({ id: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      const post = await ctx.prisma.savedPost.findFirst({
-        where: { id: input.id, userId: ctx.user.id },
+      const results = await getPostById.execute({
+        id: input.id,
+        userId: ctx.user.id,
       });
-      if (!post) {
-        throw new Error("Post not found");
+
+      if (results.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Post not found",
+        });
       }
-      return post;
+
+      return results[0];
     }),
 
-  // ── save ───────────────────────────────────────────────────────────────────
-  // Upsert a saved post. Safe to call multiple times with the same externalId.
+  /** Upsert a saved post. Safe to call multiple times with the same externalId. */
   save: protectedProcedure
     .input(savePostInput)
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.savedPost.upsert({
-        where: {
-          userId_platform_externalId: {
-            userId: ctx.user.id,
-            platform: input.platform,
-            externalId: input.externalId,
-          },
-        },
-        create: {
-          userId: ctx.user.id,
+      const userId = ctx.user.id;
+
+      // Check if post already exists for this user+platform+externalId
+      const existing = await ctx.db
+        .select({ id: savedPosts.id })
+        .from(savedPosts)
+        .where(
+          and(
+            eq(savedPosts.userId, userId),
+            eq(savedPosts.platform, input.platform),
+            eq(savedPosts.externalId, input.externalId),
+          ),
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        // Update existing post
+        const updated = await ctx.db
+          .update(savedPosts)
+          .set({
+            title: input.title,
+            description: input.description,
+            url: input.url,
+            thumbnail: input.thumbnail,
+            metadata: input.metadata,
+            updatedAt: new Date(),
+          })
+          .where(eq(savedPosts.id, existing[0].id))
+          .returning();
+
+        return updated[0];
+      }
+
+      // Insert new post
+      const inserted = await ctx.db
+        .insert(savedPosts)
+        .values({
+          userId,
           platform: input.platform,
           externalId: input.externalId,
           title: input.title,
@@ -116,33 +166,34 @@ export const postsRouter = createTRPCRouter({
           thumbnail: input.thumbnail,
           metadata: input.metadata,
           savedAt: new Date(),
-        },
-        update: {
-          title: input.title,
-          description: input.description,
-          url: input.url,
-          thumbnail: input.thumbnail,
-          metadata: input.metadata,
-          updatedAt: new Date(),
-        },
-      });
+        })
+        .returning();
+
+      return inserted[0];
     }),
 
-  // ── delete ─────────────────────────────────────────────────────────────────
-  // Delete a post by ID. The userId check prevents deleting other users' posts.
+  /** Delete a post by ID. The userId check prevents deleting other users' posts. */
   delete: protectedProcedure
-    .input(z.object({ id: z.string().cuid() }))
+    .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const deleted = await ctx.prisma.savedPost.deleteMany({
-        where: { id: input.id, userId: ctx.user.id },
-      });
-      if (deleted.count === 0) {
-        throw new Error("Post not found or already deleted");
+      const deleted = await ctx.db
+        .delete(savedPosts)
+        .where(
+          and(eq(savedPosts.id, input.id), eq(savedPosts.userId, ctx.user.id)),
+        )
+        .returning({ id: savedPosts.id });
+
+      if (deleted.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Post not found or already deleted",
+        });
       }
+
       return { success: true };
     }),
 
-  // ── deleteByExternalId ─────────────────────────────────────────────────────
+  /** Delete a post by platform + externalId. */
   deleteByExternalId: protectedProcedure
     .input(
       z.object({
@@ -151,61 +202,88 @@ export const postsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.prisma.savedPost.deleteMany({
-        where: {
-          userId: ctx.user.id,
-          platform: input.platform,
-          externalId: input.externalId,
-        },
-      });
+      await ctx.db
+        .delete(savedPosts)
+        .where(
+          and(
+            eq(savedPosts.userId, ctx.user.id),
+            eq(savedPosts.platform, input.platform),
+            eq(savedPosts.externalId, input.externalId),
+          ),
+        );
+
       return { success: true };
     }),
 
-  // ── fetchLinkedInContent ──────────────────────────────────────────────────
-  // Fetch full LinkedIn post content via ScrapingDog API
-  fetchLinkedInContent: protectedProcedure
-    .input(z.object({ postId: z.string().cuid() }))
-    .mutation(async ({ ctx, input }) => {
-      const post = await ctx.prisma.savedPost.findFirst({
-        where: { id: input.postId, userId: ctx.user.id, platform: "linkedin" },
-      });
-      if (!post) throw new Error("Post not found");
+  /** Summary count per platform (uses prepared statement). */
+  counts: protectedProcedure.query(async ({ ctx }) => {
+    const results = await countPostsByPlatform.execute({
+      userId: ctx.user.id,
+    });
 
-      // Extract the activity ID from the URL
-      const activityMatch = post.url.match(/activity[:\-](\d+)/);
+    return results.map((r) => ({
+      platform: r.platform,
+      count: Number(r.count),
+    }));
+  }),
+
+  /** Fetch full LinkedIn post content via ScrapingDog API. */
+  fetchLinkedInContent: protectedProcedure
+    .input(z.object({ postId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const post = await ctx.db
+        .select()
+        .from(savedPosts)
+        .where(
+          and(
+            eq(savedPosts.id, input.postId),
+            eq(savedPosts.userId, ctx.user.id),
+            eq(savedPosts.platform, "linkedin"),
+          ),
+        )
+        .limit(1);
+
+      if (post.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Post not found",
+        });
+      }
+
+      const linkedInPost = post[0];
+
+      const activityMatch = linkedInPost.url.match(/activity[:\-](\d+)/);
       if (!activityMatch) {
-        throw new Error("Could not extract LinkedIn activity ID from URL");
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Could not extract LinkedIn activity ID from URL",
+        });
       }
 
       const linkedInPostId = activityMatch[1];
       const apiKey = process.env.SCRAPINGDOG_API_KEY;
-      if (!apiKey) throw new Error("ScrapingDog API key not configured");
+      if (!apiKey) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "ScrapingDog API key not configured",
+        });
+      }
 
-      // ScrapingDog expects just the numeric activity ID
-      const url = new URL("https://api.scrapingdog.com/profile/post");
+      const url = new URL(`${SCRAPINGDOG_API_BASE}/profile/post`);
       url.searchParams.set("api_key", apiKey);
       url.searchParams.set("id", linkedInPostId);
       url.searchParams.set("type", "profile");
 
-      console.log("=== ScrapingDog Request ===");
-      console.log("Activity ID:", linkedInPostId);
-      console.log("API URL:", url.toString());
-
       const res = await fetch(url.toString());
       if (!res.ok) {
         const errorBody = await res.text().catch(() => "");
-        console.error("=== ScrapingDog Error ===");
-        console.error("Status:", res.status);
-        console.error("Body:", errorBody);
-        throw new Error(`ScrapingDog API error: ${res.status} - ${errorBody}`);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `ScrapingDog API error: ${res.status} - ${errorBody}`,
+        });
       }
 
       const data = await res.json();
-
-      console.log("=== ScrapingDog Response ===");
-      console.log(JSON.stringify(data, null, 2));
-
-      // Extract from post_results
       const pr = data?.post_results || data;
 
       const content = pr?.text || null;
@@ -235,19 +313,19 @@ export const postsRouter = createTRPCRouter({
       const activityDate = pr?.activity_date || null;
       const shareUrl = pr?.share_url || null;
 
-      // Update DB
       if (content) {
-        await ctx.prisma.savedPost.update({
-          where: { id: post.id },
-          data: {
-            description: content.slice(0, 2000),
+        await ctx.db
+          .update(savedPosts)
+          .set({
+            description: content.slice(0, MAX_DESCRIPTION_LENGTH),
             ...(authorName ? { authorName } : {}),
             ...(authorImage ? { thumbnail: authorImage } : {}),
             metadata: {
-              ...((post.metadata as Record<string, unknown>) || {}),
+              ...((linkedInPost.metadata as Record<string, unknown>) || {}),
               authorJobTitle:
                 authorTitle ||
-                (post.metadata as Record<string, string>)?.authorJobTitle,
+                (linkedInPost.metadata as Record<string, string>)
+                  ?.authorJobTitle,
               authorUrl,
               authorFollowers,
               fetchedAt: new Date().toISOString(),
@@ -255,8 +333,8 @@ export const postsRouter = createTRPCRouter({
               activityDate,
               shareUrl,
             },
-          },
-        });
+          })
+          .where(eq(savedPosts.id, linkedInPost.id));
       }
 
       return {
@@ -272,63 +350,4 @@ export const postsRouter = createTRPCRouter({
         shareUrl,
       };
     }),
-
-  // ── addNote ──────────────────────────────────────────────────────────────
-  addNote: protectedProcedure
-    .input(
-      z.object({
-        postId: z.string().cuid(),
-        content: z.string().min(1).max(5000),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Verify post belongs to user
-      const post = await ctx.prisma.savedPost.findFirst({
-        where: { id: input.postId, userId: ctx.user.id },
-      });
-      if (!post) throw new Error("Post not found");
-
-      return ctx.prisma.postNote.create({
-        data: {
-          postId: input.postId,
-          userId: ctx.user.id,
-          content: input.content,
-        },
-      });
-    }),
-
-  // ── deleteNote ─────────────────────────────────────────────────────────────
-  deleteNote: protectedProcedure
-    .input(z.object({ noteId: z.string().cuid() }))
-    .mutation(async ({ ctx, input }) => {
-      const deleted = await ctx.prisma.postNote.deleteMany({
-        where: { id: input.noteId, userId: ctx.user.id },
-      });
-      if (deleted.count === 0) throw new Error("Note not found");
-      return { success: true };
-    }),
-
-  // ── getNotes ───────────────────────────────────────────────────────────────
-  getNotes: protectedProcedure
-    .input(z.object({ postId: z.string().cuid() }))
-    .query(async ({ ctx, input }) => {
-      return ctx.prisma.postNote.findMany({
-        where: { postId: input.postId, userId: ctx.user.id },
-        orderBy: { createdAt: "desc" },
-      });
-    }),
-
-  // ── counts ─────────────────────────────────────────────────────────────────
-  // Summary count per platform — used by the sidebar / stats panel.
-  counts: protectedProcedure.query(async ({ ctx }) => {
-    const results = await ctx.prisma.savedPost.groupBy({
-      by: ["platform"],
-      where: { userId: ctx.user.id },
-      _count: { id: true },
-    });
-    return results.map((r) => ({
-      platform: r.platform,
-      count: r._count.id,
-    }));
-  }),
 });

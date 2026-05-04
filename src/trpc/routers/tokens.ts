@@ -1,35 +1,28 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { eq, and, desc } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { createTRPCRouter, protectedProcedure } from "../init";
-import { randomBytes, createHash } from "crypto";
-
-// Generate a secure random token
-function generateToken(): string {
-  return `sav_${randomBytes(32).toString("hex")}`;
-}
-
-// Hash token for storage (we only store hashed version)
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
+import { apiTokens } from "@/db/schema/api-tokens";
+import { hashToken, generateToken } from "@/lib/auth/token-utils";
 
 export const tokensRouter = createTRPCRouter({
-  // List all tokens for the current user (without revealing the actual token)
+  /** List all tokens for the current user (without revealing the raw token). */
   list: protectedProcedure.query(async ({ ctx }) => {
-    const tokens = await ctx.prisma.apiToken.findMany({
-      where: { userId: ctx.user.id },
-      select: {
-        id: true,
-        name: true,
-        lastUsed: true,
-        expiresAt: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    return tokens;
+    return ctx.db
+      .select({
+        id: apiTokens.id,
+        name: apiTokens.name,
+        lastUsed: apiTokens.lastUsed,
+        expiresAt: apiTokens.expiresAt,
+        createdAt: apiTokens.createdAt,
+      })
+      .from(apiTokens)
+      .where(eq(apiTokens.userId, ctx.user.id))
+      .orderBy(desc(apiTokens.createdAt));
   }),
 
-  // Create a new API token
+  /** Create a new API token. Returns the raw token only once. */
   create: protectedProcedure
     .input(
       z.object({
@@ -45,39 +38,44 @@ export const tokensRouter = createTRPCRouter({
         ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000)
         : null;
 
-      const token = await ctx.prisma.apiToken.create({
-        data: {
-          id: randomBytes(12).toString("hex"),
+      const inserted = await ctx.db
+        .insert(apiTokens)
+        .values({
+          id: createId(),
           userId: ctx.user.id,
           name: input.name,
           token: hashedToken,
           expiresAt,
-        },
-      });
+        })
+        .returning();
 
-      // Return the raw token only once - user must save it
+      const token = inserted[0];
+
       return {
         id: token.id,
         name: token.name,
-        token: rawToken, // Only returned on creation!
+        token: rawToken,
         expiresAt: token.expiresAt,
         createdAt: token.createdAt,
       };
     }),
 
-  // Delete a token
+  /** Delete a token by ID (verifies it belongs to the current user). */
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const deleted = await ctx.prisma.apiToken.deleteMany({
-        where: {
-          id: input.id,
-          userId: ctx.user.id,
-        },
-      });
+      const deleted = await ctx.db
+        .delete(apiTokens)
+        .where(
+          and(eq(apiTokens.id, input.id), eq(apiTokens.userId, ctx.user.id)),
+        )
+        .returning({ id: apiTokens.id });
 
-      if (deleted.count === 0) {
-        throw new Error("Token not found");
+      if (deleted.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Token not found or already deleted",
+        });
       }
 
       return { success: true };

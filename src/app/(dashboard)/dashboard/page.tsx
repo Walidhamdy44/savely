@@ -1,6 +1,7 @@
 import { HydrateClient, prefetch, trpc } from "@/trpc/server";
-import { PostsGrid } from "@/components/posts-grid";
+import { PostsGrid } from "@/components/posts/posts-grid";
 import { AddPostDialog } from "@/components/add-post-dialog";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default async function DashboardPage() {
   // Prefetch may fail if user record hasn't been created by webhook yet
@@ -29,7 +30,9 @@ export default async function DashboardPage() {
         </div>
 
         {/* Posts grid with infinite scroll */}
-        <PostsGrid />
+        <ErrorBoundary>
+          <PostsGrid />
+        </ErrorBoundary>
       </div>
     </HydrateClient>
   );
