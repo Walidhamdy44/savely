@@ -154,6 +154,7 @@ export const postsRouter = createTRPCRouter({
       }
 
       // Insert new post
+      const now = new Date();
       const inserted = await ctx.db
         .insert(savedPosts)
         .values({
@@ -165,7 +166,9 @@ export const postsRouter = createTRPCRouter({
           url: input.url,
           thumbnail: input.thumbnail,
           metadata: input.metadata,
-          savedAt: new Date(),
+          savedAt: now,
+          createdAt: now,
+          updatedAt: now,
         })
         .returning();
 

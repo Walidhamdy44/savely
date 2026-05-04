@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { eq, and } from "drizzle-orm";
 import type { DrizzleClient } from "@/db/client";
 import type { SyncHandler, SyncResult } from "@/types/sync";
 import { savedPosts } from "@/db/schema/saved-posts";
@@ -49,9 +50,49 @@ export const linkedInHandler: SyncHandler = {
       const externalId = extractLinkedInId(post.postURL);
 
       try {
-        await db
-          .insert(savedPosts)
-          .values({
+        // Check for existing post by URL or by (platform, externalId)
+        const existingByUrl = await db.query.savedPosts.findFirst({
+          where: and(
+            eq(savedPosts.userId, userId),
+            eq(savedPosts.url, post.postURL),
+          ),
+        });
+
+        const existingByExternalId = !existingByUrl
+          ? await db.query.savedPosts.findFirst({
+              where: and(
+                eq(savedPosts.userId, userId),
+                eq(savedPosts.platform, "linkedin"),
+                eq(savedPosts.externalId, externalId),
+              ),
+            })
+          : null;
+
+        const existing = existingByUrl || existingByExternalId;
+
+        if (existing) {
+          await db
+            .update(savedPosts)
+            .set({
+              title: post.authorName || "LinkedIn Post",
+              description: (post.postContent || post.authorJobTitle)?.slice(
+                0,
+                2000,
+              ),
+              thumbnail: post.postImage ?? null,
+              authorName: post.authorName,
+              metadata: {
+                authorProfileURL: post.authorProfileURL,
+                authorJobTitle: post.authorJobTitle,
+                timeSincePosted: post.timeSincePosted,
+                scrapedAt: post.scrapedAt,
+              },
+              updatedAt: new Date(),
+            })
+            .where(eq(savedPosts.id, existing.id));
+        } else {
+          const now = new Date();
+          await db.insert(savedPosts).values({
             userId,
             platform: "linkedin",
             externalId,
@@ -71,29 +112,10 @@ export const linkedInHandler: SyncHandler = {
               scrapedAt: post.scrapedAt,
             },
             savedAt: new Date(post.scrapedAt),
-          })
-          .onConflictDoUpdate({
-            target: [
-              savedPosts.userId,
-              savedPosts.platform,
-              savedPosts.externalId,
-            ],
-            set: {
-              title: post.authorName || "LinkedIn Post",
-              description: (post.postContent || post.authorJobTitle)?.slice(
-                0,
-                2000,
-              ),
-              thumbnail: post.postImage ?? null,
-              authorName: post.authorName,
-              metadata: {
-                authorProfileURL: post.authorProfileURL,
-                authorJobTitle: post.authorJobTitle,
-                timeSincePosted: post.timeSincePosted,
-                scrapedAt: post.scrapedAt,
-              },
-            },
+            createdAt: now,
+            updatedAt: now,
           });
+        }
         saved++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

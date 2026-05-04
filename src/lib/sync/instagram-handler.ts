@@ -62,12 +62,25 @@ export const instagramHandler: SyncHandler = {
       const externalId = extractInstagramId(postURL, postImage);
 
       try {
-        const existing = await db.query.savedPosts.findFirst({
+        // Check for existing post by URL or by (platform, externalId)
+        const existingByUrl = await db.query.savedPosts.findFirst({
           where: and(
             eq(savedPosts.userId, userId),
             eq(savedPosts.url, postURL),
           ),
         });
+
+        const existingByExternalId = !existingByUrl
+          ? await db.query.savedPosts.findFirst({
+              where: and(
+                eq(savedPosts.userId, userId),
+                eq(savedPosts.platform, "instagram"),
+                eq(savedPosts.externalId, externalId),
+              ),
+            })
+          : null;
+
+        const existing = existingByUrl || existingByExternalId;
 
         if (existing) {
           await db
@@ -77,37 +90,27 @@ export const instagramHandler: SyncHandler = {
               description: postCaption?.slice(0, 2000) || null,
               thumbnail: postImage || null,
               platform: "instagram",
+              updatedAt: new Date(),
             })
             .where(eq(savedPosts.id, existing.id));
         } else {
-          await db
-            .insert(savedPosts)
-            .values({
-              userId,
-              platform: "instagram",
-              externalId,
-              title: postCaption?.slice(0, 100) || "Instagram Post",
-              description: postCaption?.slice(0, 2000) || null,
-              url: postURL,
-              thumbnail: postImage || null,
-              sourceType: "extension",
-              metadata: {
-                scrapedAt: post.scrapedAt || new Date().toISOString(),
-              },
-              savedAt: post.scrapedAt ? new Date(post.scrapedAt) : new Date(),
-            })
-            .onConflictDoUpdate({
-              target: [
-                savedPosts.userId,
-                savedPosts.platform,
-                savedPosts.externalId,
-              ],
-              set: {
-                title: postCaption?.slice(0, 100) || "Instagram Post",
-                description: postCaption?.slice(0, 2000) || null,
-                thumbnail: postImage || null,
-              },
-            });
+          const now = new Date();
+          await db.insert(savedPosts).values({
+            userId,
+            platform: "instagram",
+            externalId,
+            title: postCaption?.slice(0, 100) || "Instagram Post",
+            description: postCaption?.slice(0, 2000) || null,
+            url: postURL,
+            thumbnail: postImage || null,
+            sourceType: "extension",
+            metadata: {
+              scrapedAt: post.scrapedAt || now.toISOString(),
+            },
+            savedAt: post.scrapedAt ? new Date(post.scrapedAt) : now,
+            createdAt: now,
+            updatedAt: now,
+          });
         }
         saved++;
       } catch (err) {

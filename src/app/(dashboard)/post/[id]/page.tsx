@@ -1,5 +1,5 @@
 import { HydrateClient, prefetch, trpc } from "@/trpc/server";
-import { PostDetail } from "@/components/posts/post-detail";
+import { PostDetailRouter } from "@/components/posts/post-detail-router";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default async function PostDetailPage({
@@ -19,7 +19,7 @@ export default async function PostDetailPage({
   return (
     <HydrateClient>
       <ErrorBoundary>
-        <PostDetail postId={id} />
+        <PostDetailRouter postId={id} />
       </ErrorBoundary>
     </HydrateClient>
   );

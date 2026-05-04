@@ -1,3 +1,4 @@
+import { eq, and } from "drizzle-orm";
 import type { DrizzleClient } from "@/db/client";
 import type { SyncHandler, SyncResult } from "@/types/sync";
 import { savedPosts } from "@/db/schema/saved-posts";
@@ -32,9 +33,44 @@ export const youtubeHandler: SyncHandler = {
 
     for (const video of parsed.videos) {
       try {
-        await db
-          .insert(savedPosts)
-          .values({
+        // Check for existing post by URL or by (platform, externalId)
+        const existingByUrl = await db.query.savedPosts.findFirst({
+          where: and(
+            eq(savedPosts.userId, userId),
+            eq(savedPosts.url, video.videoUrl),
+          ),
+        });
+
+        const existingByExternalId = !existingByUrl
+          ? await db.query.savedPosts.findFirst({
+              where: and(
+                eq(savedPosts.userId, userId),
+                eq(savedPosts.platform, "youtube"),
+                eq(savedPosts.externalId, video.videoId),
+              ),
+            })
+          : null;
+
+        const existing = existingByUrl || existingByExternalId;
+
+        if (existing) {
+          await db
+            .update(savedPosts)
+            .set({
+              title: video.title,
+              description: video.description?.slice(0, 2000),
+              thumbnail: video.thumbnailUrl ?? null,
+              authorName: video.channelName,
+              metadata: {
+                channelUrl: video.channelUrl,
+                scrapedAt: video.scrapedAt,
+              },
+              updatedAt: new Date(),
+            })
+            .where(eq(savedPosts.id, existing.id));
+        } else {
+          const now = new Date();
+          await db.insert(savedPosts).values({
             userId,
             platform: "youtube",
             externalId: video.videoId,
@@ -49,24 +85,10 @@ export const youtubeHandler: SyncHandler = {
               scrapedAt: video.scrapedAt,
             },
             savedAt: new Date(video.scrapedAt),
-          })
-          .onConflictDoUpdate({
-            target: [
-              savedPosts.userId,
-              savedPosts.platform,
-              savedPosts.externalId,
-            ],
-            set: {
-              title: video.title,
-              description: video.description?.slice(0, 2000),
-              thumbnail: video.thumbnailUrl ?? null,
-              authorName: video.channelName,
-              metadata: {
-                channelUrl: video.channelUrl,
-                scrapedAt: video.scrapedAt,
-              },
-            },
+            createdAt: now,
+            updatedAt: now,
           });
+        }
         saved++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

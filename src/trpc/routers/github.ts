@@ -275,6 +275,7 @@ export const githubRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const now = new Date();
       const result = await ctx.db
         .insert(savedPosts)
         .values({
@@ -293,6 +294,8 @@ export const githubRouter = createTRPCRouter({
             forks: input.forks,
             topics: input.topics,
           },
+          createdAt: now,
+          updatedAt: now,
         })
         .onConflictDoUpdate({
           target: [
@@ -310,6 +313,7 @@ export const githubRouter = createTRPCRouter({
               forks: input.forks,
               topics: input.topics,
             },
+            updatedAt: now,
           },
         })
         .returning();
